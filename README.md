@@ -1,4 +1,3 @@
-
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
@@ -154,7 +153,8 @@ local ScreenGui = create("ScreenGui", {
 local Main = create("Frame", {
     Name = "SettingsPanel",
     Size = UDim2.fromOffset(700, 460),
-    Position = UDim2.new(0.5, -350, 0.5, -230),
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
     BackgroundColor3 = Colors.Background,
     BackgroundTransparency = CONFIG.Transparency,
     BorderSizePixel = 0,
@@ -167,6 +167,40 @@ local MainStroke = stroke(Main, Colors.Accent, 0.5)
 local Scale = create("UIScale", {
     Scale = CONFIG.MenuSize
 }, Main)
+
+local function updateResponsiveScale()
+    local camera = workspace.CurrentCamera
+    if not camera then
+        Scale.Scale = CONFIG.MenuSize
+        return
+    end
+
+    local viewport = camera.ViewportSize
+    local fitX = math.max(0.55, (viewport.X - 24) / 700)
+    local fitY = math.max(0.55, (viewport.Y - 24) / 460)
+    Scale.Scale = math.min(CONFIG.MenuSize, fitX, fitY)
+end
+
+local CameraViewportConnection
+
+local function watchCamera(camera)
+    if CameraViewportConnection then
+        CameraViewportConnection:Disconnect()
+        CameraViewportConnection = nil
+    end
+
+    if camera then
+        CameraViewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateResponsiveScale)
+        table.insert(LifetimeConnections, CameraViewportConnection)
+    end
+
+    updateResponsiveScale()
+end
+
+watchCamera(workspace.CurrentCamera)
+table.insert(LifetimeConnections, workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+    watchCamera(workspace.CurrentCamera)
+end))
 
 local Sidebar = create("Frame", {
     Size = UDim2.new(0, 175, 1, 0),
@@ -808,17 +842,31 @@ local function applyObjectGraphics(object)
     end
 end
 
+local GraphicsScanned = false
+
 local function applyGraphics()
+    local active = Settings.FixLag or Settings.Shadows or Settings.Particles or Settings.Textures or Settings.PostEffects
+
     Lighting.GlobalShadows = OriginalLighting.GlobalShadows and not (Settings.Shadows or Settings.FixLag)
+
+    if active and not GraphicsScanned then
+        GraphicsScanned = true
+        for _, object in ipairs(game:GetDescendants()) do
+            applyObjectGraphics(object)
+        end
+        return
+    end
+
+    if not active then
+        GraphicsScanned = false
+    end
 
     for object in pairs(OriginalObjects) do
         if object and object.Parent then
             applyObjectGraphics(object)
+        else
+            OriginalObjects[object] = nil
         end
-    end
-
-    for _, object in ipairs(game:GetDescendants()) do
-        applyObjectGraphics(object)
     end
 end
 
@@ -840,6 +888,7 @@ local function restoreGraphics(silent)
     Settings.Particles = false
     Settings.Textures = false
     Settings.PostEffects = false
+    GraphicsScanned = false
 
     if not silent then
         notify("Graphics restored")
@@ -854,7 +903,7 @@ local function applyTheme(silent)
     MainStroke.Color = Colors.Accent
 
     Avatar.Image = "rbxassetid://" .. CONFIG.AvatarId
-    Scale.Scale = CONFIG.MenuSize
+    updateResponsiveScale()
 
     local openStroke = OpenButton and OpenButton:FindFirstChildOfClass("UIStroke")
 
@@ -1133,7 +1182,7 @@ Pages["Interface"] = function()
 
     addSlider("Menu Size", 0.7, 1.2, CONFIG.MenuSize, function(value)
         CONFIG.MenuSize = value
-        Scale.Scale = value
+        updateResponsiveScale()
     end)
 
     addSlider("Transparency", 0, 0.5, CONFIG.Transparency, function(value)
