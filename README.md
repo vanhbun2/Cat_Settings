@@ -188,7 +188,6 @@ local function watchCamera(camera)
         CameraViewportConnection:Disconnect()
         CameraViewportConnection = nil
     end
-
     if camera then
         CameraViewportConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateResponsiveScale)
         table.insert(LifetimeConnections, CameraViewportConnection)
@@ -385,10 +384,8 @@ local function addCard(height)
         BackgroundTransparency = 0.08,
         BorderSizePixel = 0
     }, PageHolder)
-
     corner(card, 12)
     stroke(card, Color3.new(1, 1, 1), 0.94)
-
     return card
 end
 
