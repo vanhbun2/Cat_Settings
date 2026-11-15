@@ -1,2474 +1,1785 @@
-local Players = game:GetService("Players")
-local Lighting = game:GetService("Lighting")
-local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local Stats = game:GetService("Stats")
-local HttpService = game:GetService("HttpService")
-local TextService = game:GetService("TextService")
+local plrs = game:GetService("Players")
+local lt = game:GetService("Lighting")
+local tw = game:GetService("TweenService")
+local uis = game:GetService("UserInputService")
+local rs = game:GetService("RunService")
+local stats = game:GetService("Stats")
+local http = game:GetService("HttpService")
+local tsv = game:GetService("TextService")
+local lp = plrs.LocalPlayer
+local pg = lp:WaitForChild("PlayerGui", 10) or lp:FindFirstChildOfClass("PlayerGui")
+local env = (getgenv and getgenv()) or _G
+if env.CatSettingsUnload then
+    pcall(env.CatSettingsUnload)
+    env.CatSettingsUnload = nil
+end
+local old = pg and pg:FindFirstChild("CatSettings")
+if old then
+    old:Destroy()
+end
+local file = "CatSettings.json"
+local cs = type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
+local dtheme = Color3.fromRGB(120, 105, 255)
+local cf = {avatar = "74894092061904", theme = dtheme, size = 1, tr = 0.12, key = Enum.KeyCode.RightShift, notif = true, btn = true}
+local fs = {spec = nil, key = nil, game = true, menu = true}
+local sv = {skies = {}, fonts = {}, active = nil}
 
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
-local Shared = (getgenv and getgenv()) or _G
-
-if Shared.CatSettingsUnload then
-    pcall(Shared.CatSettingsUnload)
-    Shared.CatSettingsUnload = nil
+local function trim(v)
+    return tostring(v):match("^%s*(.-)%s*$") or ""
 end
 
-local previousGui = PlayerGui:FindFirstChild("CatSettings")
-if previousGui then
-    previousGui:Destroy()
+local function nid(v)
+    local t = tostring(v)
+    return t:match("^%s*(%d+)%s*$") or t:match("rbxassetid://(%d+)") or t:match("[?&]id=(%d+)")
 end
 
-local FILE_NAME = "CatSettings.json"
-local CAN_SAVE = type(writefile) == "function" and type(readfile) == "function" and type(isfile) == "function"
-local DEFAULT_THEME = Color3.fromRGB(120, 105, 255)
-
-local CONFIG = {
-    AvatarId = "139350569952709",
-    Theme = DEFAULT_THEME,
-    MenuSize = 1,
-    Transparency = 0.12,
-    ToggleKey = Enum.KeyCode.RightShift,
-    Notifications = true,
-    ShowButton = true
-}
-
-local FontState = {
-    Spec = nil,
-    Key = nil,
-    Game = true,
-    Menu = true
-}
-
-local Saved = {
-    Skies = {},
-    Fonts = {},
-    ActiveFont = nil
-}
-
-local function trim(value)
-    return (string.match(tostring(value), "^%s*(.-)%s*$"))
-end
-
-local function normalizeId(value)
-    local source = tostring(value)
-    return source:match("^%s*(%d+)%s*$") or source:match("rbxassetid://(%d+)") or source:match("[?&]id=(%d+)")
-end
-
-local function parseHex(value)
-    local hex = tostring(value):gsub("#", ""):gsub("%s", "")
-
-    if #hex ~= 6 or not hex:match("^%x+$") then
+local function hex(v)
+    local h = tostring(v):gsub("[#%s]", "")
+    if #h ~= 6 or not h:match("^%x+$") then
         return nil
     end
-
-    return Color3.fromRGB(
-        tonumber(hex:sub(1, 2), 16),
-        tonumber(hex:sub(3, 4), 16),
-        tonumber(hex:sub(5, 6), 16)
-    )
+    return Color3.fromRGB(tonumber(h:sub(1, 2), 16), tonumber(h:sub(3, 4), 16), tonumber(h:sub(5, 6), 16))
 end
 
-local function toHex(color)
-    return string.format(
-        "#%02X%02X%02X",
-        math.round(color.R * 255),
-        math.round(color.G * 255),
-        math.round(color.B * 255)
-    )
+local function tohex(c)
+    return string.format("#%02X%02X%02X", math.round(math.clamp(c.R, 0, 1) * 255), math.round(math.clamp(c.G, 0, 1) * 255), math.round(math.clamp(c.B, 0, 1) * 255))
 end
 
-local function loadProfile()
-    if not CAN_SAVE then
+local function load()
+    if not cs then
         return
     end
-
-    local ok, data = pcall(function()
-        if isfile(FILE_NAME) then
-            return HttpService:JSONDecode(readfile(FILE_NAME))
+    local ok, d = pcall(function()
+        if isfile(file) then
+            return http:JSONDecode(readfile(file))
         end
-
-        return nil
     end)
-
-    if not ok or type(data) ~= "table" then
+    if not ok or type(d) ~= "table" then
         return
     end
-
-    if type(data.Theme) == "table" then
-        local r = tonumber(data.Theme[1])
-        local g = tonumber(data.Theme[2])
-        local b = tonumber(data.Theme[3])
-
+    if type(d.Theme) == "table" then
+        local r, g, b = tonumber(d.Theme[1]), tonumber(d.Theme[2]), tonumber(d.Theme[3])
         if r and g and b then
-            CONFIG.Theme = Color3.fromRGB(math.clamp(r, 0, 255), math.clamp(g, 0, 255), math.clamp(b, 0, 255))
+            cf.theme = Color3.fromRGB(math.clamp(r, 0, 255), math.clamp(g, 0, 255), math.clamp(b, 0, 255))
         end
     end
-
-    if type(data.MenuSize) == "number" then
-        CONFIG.MenuSize = math.clamp(data.MenuSize, 0.7, 1.2)
+    if type(d.MenuSize) == "number" then
+        cf.size = math.clamp(d.MenuSize, 0.7, 1.2)
     end
-
-    if type(data.Transparency) == "number" then
-        CONFIG.Transparency = math.clamp(data.Transparency, 0, 0.5)
+    if type(d.Transparency) == "number" then
+        cf.tr = math.clamp(d.Transparency, 0, 0.5)
     end
-
-    if type(data.Notifications) == "boolean" then
-        CONFIG.Notifications = data.Notifications
+    if type(d.Notifications) == "boolean" then
+        cf.notif = d.Notifications
     end
-
-    if type(data.ShowButton) == "boolean" then
-        CONFIG.ShowButton = data.ShowButton
+    if type(d.ShowButton) == "boolean" then
+        cf.btn = d.ShowButton
     end
-
-    if type(data.Key) == "string" then
-        local found, key = pcall(function()
-            return Enum.KeyCode[data.Key]
+    if type(d.Key) == "string" then
+        local f, k = pcall(function()
+            return Enum.KeyCode[d.Key]
         end)
-
-        if found and key then
-            CONFIG.ToggleKey = key
+        if f and k then
+            cf.key = k
         end
     end
-
-    if type(data.GameText) == "boolean" then
-        FontState.Game = data.GameText
+    if type(d.GameText) == "boolean" then
+        fs.game = d.GameText
     end
-
-    if type(data.MenuText) == "boolean" then
-        FontState.Menu = data.MenuText
+    if type(d.MenuText) == "boolean" then
+        fs.menu = d.MenuText
     end
-
-    if type(data.ActiveFont) == "string" then
-        Saved.ActiveFont = data.ActiveFont
+    if type(d.ActiveFont) == "string" then
+        sv.active = d.ActiveFont
     end
-
-    if type(data.Skies) == "table" then
-        for _, entry in ipairs(data.Skies) do
-            if type(entry) == "table" and type(entry.Name) == "string" and type(entry.Ids) == "table" then
+    if type(d.Skies) == "table" then
+        for _, e in ipairs(d.Skies) do
+            if type(e) == "table" and type(e.Name) == "string" and type(e.Ids) == "table" then
                 local ids = {}
-
-                for _, rawId in ipairs(entry.Ids) do
-                    local clean = normalizeId(rawId)
-
-                    if clean then
-                        table.insert(ids, clean)
+                for _, r in ipairs(e.Ids) do
+                    local n = nid(r)
+                    if n then
+                        table.insert(ids, n)
                     end
                 end
-
                 if #ids == 1 or #ids == 6 then
-                    table.insert(Saved.Skies, {Name = entry.Name, Ids = ids})
+                    table.insert(sv.skies, {Name = e.Name, Ids = ids})
                 end
             end
         end
     end
-
-    if type(data.Fonts) == "table" then
-        for _, entry in ipairs(data.Fonts) do
-            if type(entry) == "table" and type(entry.Name) == "string" and type(entry.Value) == "string" then
-                table.insert(Saved.Fonts, {Name = entry.Name, Value = entry.Value})
+    if type(d.Fonts) == "table" then
+        for _, e in ipairs(d.Fonts) do
+            if type(e) == "table" and type(e.Name) == "string" and type(e.Value) == "string" then
+                table.insert(sv.fonts, {Name = e.Name, Value = e.Value})
             end
         end
     end
 end
+load()
 
-loadProfile()
-
-local Colors = {
-    Background = Color3.fromRGB(15, 17, 25),
-    Panel = Color3.fromRGB(23, 26, 37),
-    Card = Color3.fromRGB(31, 35, 49),
-    Text = Color3.fromRGB(245, 246, 255),
-    SubText = Color3.fromRGB(153, 160, 180),
-    Accent = CONFIG.Theme,
-    Green = Color3.fromRGB(90, 220, 155),
-    Yellow = Color3.fromRGB(255, 205, 90),
-    Red = Color3.fromRGB(255, 100, 110),
-    Off = Color3.fromRGB(65, 68, 82)
+local col = {
+    bg = Color3.fromRGB(15, 17, 25),
+    panel = Color3.fromRGB(23, 26, 37),
+    card = Color3.fromRGB(31, 35, 49),
+    text = Color3.fromRGB(245, 246, 255),
+    sub = Color3.fromRGB(153, 160, 180),
+    acc = cf.theme,
+    green = Color3.fromRGB(90, 220, 155),
+    yellow = Color3.fromRGB(255, 205, 90),
+    red = Color3.fromRGB(255, 100, 110),
+    off = Color3.fromRGB(65, 68, 82)
 }
 
 local function weak()
     return setmetatable({}, {__mode = "k"})
 end
 
-local OriginalLighting = {}
-local OriginalObjects = weak()
-local OriginalWater = {}
-local GameTexts = weak()
-local MenuTexts = weak()
-local HiddenSky = {}
-local HiddenAtmosphere = {}
-local Connections = {}
-local LifetimeConnections = {}
-local AccentStrokes = {}
-local Scanned = {}
-local NavButtons = {}
-local Pages = {}
-local PageNames = {"Performance", "Sky", "Lighting", "Effects", "Fonts", "Interface", "General"}
+local olt, owt = {}, {}
+local oobj, gtx, mtx = weak(), weak(), weak()
+local hsky, hatm, conns, life, astk, scanned, stok, navs, pages, fb = {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+local pnames = {"Performance", "Sky", "Lighting", "Effects", "Fonts", "Interface", "General"}
+local cam0 = workspace.CurrentCamera
 
-local startCamera = workspace.CurrentCamera
-
-local Settings = {
-    FixLag = false,
-    Shadows = false,
-    Particles = false,
-    Textures = false,
-    PostEffects = false,
-    Materials = false,
-    SimpleWater = false,
-    LowQuality = false,
-    FPS = false,
-    Ping = false,
-    Memory = false,
-    Fog = true,
-    LockTime = false,
-    LockedTime = Lighting.ClockTime,
-    Bloom = false,
-    Blur = false,
-    SunRays = false,
-    DoF = false,
-    CustomFOV = false,
-    FOV = startCamera and startCamera.FieldOfView or 70
+local s = {
+    lag = false, shd = false, ptc = false, tex = false, pst = false, mat = false, wtr = false, low = false,
+    fps = false, png = false, mem = false, fog = true, lck = false, lckt = lt.ClockTime,
+    bloom = false, blur = false, rays = false, dof = false, cfov = false,
+    fov = cam0 and cam0.FieldOfView or 70,
+    gl = 1.5, spin = 0, flow = 0
+}
+local kf = {e = "ptc", p = "pst", d = "tex", m = "mat"}
+local bm = {
+    Gotham = "GothamBold", GothamSemibold = "GothamBold", GothamBlack = "GothamBlack",
+    SourceSans = "SourceSansBold", SourceSansLight = "SourceSansBold", SourceSansSemibold = "SourceSansBold", Arial = "ArialBold"
 }
 
-local KindFlag = {
-    Emitter = "Particles",
-    Post = "PostEffects",
-    Decal = "Textures",
-    Part = "Materials"
-}
+local gui, main, scale, side, nav, body, head, holder, title, obtn, toast, minb, closeb, ind, fade
+local cur, openpage, refresh, shutdown, resetpos
+local dead, mini, anim, order, sweeptok, toasttok, savetok = false, false, 0, 0, 0, 0, 0
+local lockconn, camconn
 
-local ScreenGui
-local Main
-local Scale
-local MainStroke
-local Sidebar
-local Navigation
-local Content
-local Header
-local PageHolder
-local PageTitle
-local OpenButton
-local Toast
-local MinimizeButton
-local CloseButton
-
-local CurrentPage
-local openPage
-local refreshPage
-local shutdown
-local resetPositions
-
-local shuttingDown = false
-local minimized = false
-local menuAnimationId = 0
-local layoutOrder = 0
-local SweepToken = 0
-local ToastToken = 0
-local SaveToken = 0
-
-local BoldMap = {
-    Gotham = "GothamBold",
-    GothamSemibold = "GothamBold",
-    GothamBlack = "GothamBlack",
-    SourceSans = "SourceSansBold",
-    SourceSansLight = "SourceSansBold",
-    SourceSansSemibold = "SourceSansBold",
-    Arial = "ArialBold"
-}
-
-local function create(class, properties, parent)
-    local object = Instance.new(class)
-
-    for property, value in pairs(properties) do
-        object[property] = value
+local function mk(cls, p, par)
+    local o = Instance.new(cls)
+    for k, v in pairs(p) do
+        o[k] = v
     end
-
-    object.Parent = parent
-    return object
+    o.Parent = par
+    return o
 end
 
-local function corner(object, radius)
-    local item = Instance.new("UICorner")
-    item.CornerRadius = UDim.new(0, radius or 12)
-    item.Parent = object
-    return item
+local function rc(o, r)
+    local i = Instance.new("UICorner")
+    i.CornerRadius = UDim.new(0, r or 12)
+    i.Parent = o
 end
 
-local function stroke(object, color, transparency)
-    local item = Instance.new("UIStroke")
-    item.Color = color or Color3.new(1, 1, 1)
-    item.Transparency = transparency or 0.85
-    item.Thickness = 1
-    item.Parent = object
-    return item
+local function st(o, cr, t)
+    local i = Instance.new("UIStroke")
+    i.Color = cr or Color3.new(1, 1, 1)
+    i.Transparency = t or 0.85
+    i.Thickness = 1
+    i.Parent = o
+    return i
 end
 
-local function accentStroke(object, transparency)
-    local item = stroke(object, Colors.Accent, transparency)
-    table.insert(AccentStrokes, item)
-    return item
+local function ast(o, t)
+    table.insert(astk, st(o, col.acc, t))
 end
 
-local function padding(object, left)
-    local item = Instance.new("UIPadding")
-    item.PaddingLeft = UDim.new(0, left or 10)
-    item.PaddingRight = UDim.new(0, 10)
-    item.Parent = object
-    return item
+local function pd(o, l)
+    local i = Instance.new("UIPadding")
+    i.PaddingLeft = UDim.new(0, l or 10)
+    i.PaddingRight = UDim.new(0, 10)
+    i.Parent = o
 end
 
-local function tween(object, properties, duration)
-    if not object or not object.Parent then
+local function tn(o, p, d)
+    if o and o.Parent then
+        tw:Create(o, TweenInfo.new(d or 0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), p):Play()
+    end
+end
+
+local function apply(o, sp)
+    if not o or not o.Parent or not sp then
         return
     end
-
-    TweenService:Create(
-        object,
-        TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-        properties
-    ):Play()
-end
-
-local function applySpec(object, spec)
-    if spec.Enum then
-        object.Font = spec.Enum
-    else
-        object.FontFace = spec.Face
+    if sp.e then
+        o.Font = sp.e
+    elseif sp.f then
+        o.FontFace = sp.f
     end
 end
 
-local function menuSpec(bold)
-    local spec = FontState.Menu and FontState.Spec
-
-    if not spec then
-        return {Enum = bold and Enum.Font.GothamBold or Enum.Font.Gotham}
+local function mspec(b)
+    local sp = fs.menu and fs.spec
+    if not sp then
+        return {e = b and Enum.Font.GothamBold or Enum.Font.Gotham}
     end
-
-    if spec.Enum then
-        local boldName = BoldMap[spec.Enum.Name]
-
-        if bold and boldName then
-            return {Enum = Enum.Font[boldName]}
+    if sp.e then
+        local n = bm[sp.e.Name]
+        if b and n then
+            return {e = Enum.Font[n]}
         end
-
-        return spec
+        return sp
     end
-
-    if bold then
-        return {Face = Font.new(spec.Face.Family, Enum.FontWeight.Bold, spec.Face.Style)}
+    if b and sp.f then
+        return {f = Font.new(sp.f.Family, Enum.FontWeight.Bold, sp.f.Style)}
     end
-
-    return spec
+    return sp
 end
 
-local function text(class, properties, parent, bold)
-    local object = create(class, properties, parent)
-    MenuTexts[object] = bold == true
-    pcall(applySpec, object, menuSpec(bold == true))
-    return object
+local function tx(cls, p, par, b)
+    local o = mk(cls, p, par)
+    mtx[o] = b == true
+    pcall(apply, o, mspec(b == true))
+    return o
 end
 
-local function applyMenuFont()
-    for object, bold in pairs(MenuTexts) do
-        if object.Parent then
-            pcall(applySpec, object, menuSpec(bold))
+local function menufont()
+    for o, b in pairs(mtx) do
+        if o.Parent then
+            pcall(apply, o, mspec(b))
+        else
+            mtx[o] = nil
         end
     end
 end
 
-local function notify(message)
-    if shuttingDown or not CONFIG.Notifications or not Toast or not Toast.Parent then
+local function notify(m)
+    if dead or not cf.notif or not toast or not toast.Parent then
         return
     end
-
-    ToastToken += 1
-    local id = ToastToken
-
-    Toast.Text = message
-    Toast.Visible = true
-    Toast.Position = UDim2.new(0.5, 0, 0, -50)
-
-    tween(Toast, {
-        Position = UDim2.new(0.5, 0, 0, 14)
-    }, 0.25)
-
+    toasttok += 1
+    local id = toasttok
+    toast.Text = m
+    toast.Visible = true
+    toast.Position = UDim2.new(0.5, 0, 0, -50)
+    tn(toast, {Position = UDim2.new(0.5, 0, 0, 14)}, 0.25)
     task.delay(2.2, function()
-        if shuttingDown or id ~= ToastToken or not Toast.Parent then
+        if dead or id ~= toasttok or not toast.Parent then
             return
         end
-
-        tween(Toast, {
-            Position = UDim2.new(0.5, 0, 0, -60)
-        }, 0.25)
-
+        tn(toast, {Position = UDim2.new(0.5, 0, 0, -60)}, 0.25)
         task.delay(0.3, function()
-            if id == ToastToken and Toast.Parent then
-                Toast.Visible = false
+            if id == toasttok and toast.Parent then
+                toast.Visible = false
             end
         end)
     end)
 end
 
-local FontItems = {}
-
-for _, item in ipairs(Enum.Font:GetEnumItems()) do
-    if item.Name ~= "Legacy" and item.Name ~= "Unknown" then
-        table.insert(FontItems, item)
+local fitems = {}
+for _, i in ipairs(Enum.Font:GetEnumItems()) do
+    if i.Name ~= "Legacy" and i.Name ~= "Unknown" then
+        table.insert(fitems, i)
     end
 end
-
-table.sort(FontItems, function(a, b)
+table.sort(fitems, function(a, b)
     return a.Name < b.Name
 end)
 
-local function fontLoads(face)
-    local ok = pcall(function()
-        local params = Instance.new("GetTextBoundsParams")
-        params.Text = "Test"
-        params.Font = face
-        params.Size = 14
-        params.Width = 1000
-        TextService:GetTextBoundsAsync(params)
-    end)
-
-    return ok
+local function loads(face)
+    return (pcall(function()
+        local p = Instance.new("GetTextBoundsParams")
+        p.Text = "Test"
+        p.Font = face
+        p.Size = 14
+        p.Width = 1000
+        tsv:GetTextBoundsAsync(p)
+    end))
 end
 
-local function parseFont(value)
-    value = trim(value)
-
-    if value == "" then
+local function pfont(v, check)
+    v = trim(v)
+    if v == "" then
         return nil
     end
-
-    for _, item in ipairs(FontItems) do
-        if item.Name:lower() == value:lower() then
-            return {Enum = item, Key = "Enum:" .. item.Name}
+    for _, i in ipairs(fitems) do
+        if i.Name:lower() == v:lower() then
+            return {e = i, k = "Enum:" .. i.Name}
         end
     end
-
-    local id = normalizeId(value)
-    local family
-
-    if id then
-        family = "rbxassetid://" .. id
-    elseif value:find("^rbxasset") then
-        family = value
-    end
-
-    if not family then
+    local id = nid(v)
+    local fam = id and ("rbxassetid://" .. id) or (v:find("^rbxasset") and v)
+    if not fam then
         return nil
     end
-
-    local ok, face = pcall(Font.new, family, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-
-    if not ok or not fontLoads(face) then
+    local ok, face = pcall(Font.new, fam, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
+    if not ok or (check and not loads(face)) then
         return nil
     end
-
-    return {Face = face, Key = "Face:" .. family}
+    return {f = face, k = "Face:" .. fam}
 end
 
-local function specFromKey(key)
-    local kind, value = string.match(key, "^(%a+):(.+)$")
-
-    if kind == "Enum" then
-        for _, item in ipairs(FontItems) do
-            if item.Name == value then
-                return {Enum = item, Key = key}
-            end
-        end
-    elseif kind == "Face" then
-        local ok, face = pcall(Font.new, value, Enum.FontWeight.Regular, Enum.FontStyle.Normal)
-
-        if ok then
-            return {Face = face, Key = key}
-        end
-    end
-
-    return nil
+local function skey(k)
+    return pfont(k:match("^%a+:(.+)$") or "")
 end
 
-local function scheduleSave()
-    if not CAN_SAVE then
+local function save()
+    if not cs then
         return
     end
-
-    SaveToken += 1
-    local id = SaveToken
-
-    task.delay(0.6, function()
-        if id ~= SaveToken then
-            return
-        end
-
-        local data = {
-            Theme = {
-                math.round(CONFIG.Theme.R * 255),
-                math.round(CONFIG.Theme.G * 255),
-                math.round(CONFIG.Theme.B * 255)
-            },
-            MenuSize = CONFIG.MenuSize,
-            Transparency = CONFIG.Transparency,
-            Key = CONFIG.ToggleKey.Name,
-            Notifications = CONFIG.Notifications,
-            ShowButton = CONFIG.ShowButton,
-            Skies = Saved.Skies,
-            Fonts = Saved.Fonts,
-            ActiveFont = FontState.Key,
-            GameText = FontState.Game,
-            MenuText = FontState.Menu
-        }
-
-        pcall(function()
-            writefile(FILE_NAME, HttpService:JSONEncode(data))
-        end)
+    local d = {
+        Theme = {math.round(cf.theme.R * 255), math.round(cf.theme.G * 255), math.round(cf.theme.B * 255)},
+        MenuSize = cf.size,
+        Transparency = cf.tr,
+        Key = cf.key.Name,
+        Notifications = cf.notif,
+        ShowButton = cf.btn,
+        Skies = sv.skies,
+        Fonts = sv.fonts,
+        ActiveFont = fs.key,
+        GameText = fs.game,
+        MenuText = fs.menu
+    }
+    pcall(function()
+        writefile(file, http:JSONEncode(d))
     end)
 end
 
-local function makeDraggable(object, handle)
-    local dragging = false
-    local dragInput
-    local dragStart
-    local startPosition
-    local moved = false
+local function later()
+    if not cs then
+        return
+    end
+    savetok += 1
+    local id = savetok
+    task.delay(0.6, function()
+        if id == savetok and not dead then
+            save()
+        end
+    end)
+end
 
-    table.insert(LifetimeConnections, handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            moved = false
-            dragInput = input
-            dragStart = input.Position
-            startPosition = object.Position
+local function drag(o, h, scaled)
+    local on, di, ds, sp, mv = false, nil, nil, nil, false
+    table.insert(life, h.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            on, mv, di, ds, sp = true, false, i, i.Position, o.Position
         end
     end))
-
-    table.insert(LifetimeConnections, UserInputService.InputChanged:Connect(function(input)
-        if not dragging then
+    table.insert(life, uis.InputChanged:Connect(function(i)
+        if not on then
             return
         end
-
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input == dragInput then
-            local delta = input.Position - dragStart
-
-            if not moved and delta.Magnitude < 6 then
+        if i.UserInputType == Enum.UserInputType.MouseMovement or i == di then
+            local d = i.Position - ds
+            if not mv and d.Magnitude < 6 then
                 return
             end
-
-            moved = true
-
-            object.Position = UDim2.new(
-                startPosition.X.Scale,
-                startPosition.X.Offset + delta.X,
-                startPosition.Y.Scale,
-                startPosition.Y.Offset + delta.Y
-            )
+            mv = true
+            local f = (scaled and scale and scale.Scale) or 1
+            if f <= 0 then
+                f = 1
+            end
+            o.Position = UDim2.new(sp.X.Scale, sp.X.Offset + d.X / f, sp.Y.Scale, sp.Y.Offset + d.Y / f)
         end
     end))
-
-    table.insert(LifetimeConnections, UserInputService.InputEnded:Connect(function(input)
-        if input == dragInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-            dragInput = nil
+    table.insert(life, uis.InputEnded:Connect(function(i)
+        if i == di or i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            on, di = false, nil
         end
     end))
-
     return function()
-        return moved
+        return mv
     end
 end
 
-for _, property in ipairs({
-    "Brightness",
-    "ClockTime",
-    "Ambient",
-    "OutdoorAmbient",
-    "ColorShift_Top",
-    "ColorShift_Bottom",
-    "FogColor",
-    "FogStart",
-    "FogEnd",
-    "ExposureCompensation",
-    "GlobalShadows",
-    "EnvironmentDiffuseScale",
-    "EnvironmentSpecularScale"
-}) do
-    local ok, value = pcall(function()
-        return Lighting[property]
+for _, p in ipairs({"Brightness", "ClockTime", "Ambient", "OutdoorAmbient", "ColorShift_Top", "ColorShift_Bottom", "FogColor", "FogStart", "FogEnd", "ExposureCompensation", "GlobalShadows", "EnvironmentDiffuseScale", "EnvironmentSpecularScale"}) do
+    local ok, v = pcall(function()
+        return lt[p]
     end)
-
     if ok then
-        OriginalLighting[property] = value
+        olt[p] = v
     end
 end
 
-local Terrain = workspace:FindFirstChildOfClass("Terrain")
-
-if Terrain then
-    for _, property in ipairs({"WaterWaveSize", "WaterWaveSpeed", "WaterReflectance"}) do
+local ter = workspace:FindFirstChildOfClass("Terrain")
+if ter then
+    for _, p in ipairs({"WaterWaveSize", "WaterWaveSpeed", "WaterReflectance"}) do
         pcall(function()
-            OriginalWater[property] = Terrain[property]
+            owt[p] = ter[p]
         end)
     end
 end
 
-local OriginalQuality
-
+local oq
 pcall(function()
-    OriginalQuality = settings().Rendering.QualityLevel
+    oq = settings().Rendering.QualityLevel
 end)
 
-ScreenGui = create("ScreenGui", {
-    Name = "CatSettings",
-    ResetOnSpawn = false,
-    DisplayOrder = 50,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-}, PlayerGui)
+gui = mk("ScreenGui", {Name = "CatSettings", ResetOnSpawn = false, DisplayOrder = 50, ZIndexBehavior = Enum.ZIndexBehavior.Sibling}, pg)
+fade = mk("Frame", {Size = UDim2.new(1, 0, 1, 120), Position = UDim2.fromOffset(0, -60), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1, BorderSizePixel = 0, ZIndex = 0}, gui)
+main = mk("Frame", {Name = "SettingsPanel", Size = UDim2.fromOffset(700, 460), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = col.bg, BackgroundTransparency = cf.tr, BorderSizePixel = 0, ClipsDescendants = true, Visible = false}, gui)
+rc(main, 18)
+ast(main, 0.5)
+scale = mk("UIScale", {Scale = cf.size}, main)
 
-Main = create("Frame", {
-    Name = "SettingsPanel",
-    Size = UDim2.fromOffset(700, 460),
-    AnchorPoint = Vector2.new(0.5, 0.5),
-    Position = UDim2.fromScale(0.5, 0.5),
-    BackgroundColor3 = Colors.Background,
-    BackgroundTransparency = CONFIG.Transparency,
-    BorderSizePixel = 0,
-    ClipsDescendants = true,
-    Visible = false
-}, ScreenGui)
-
-corner(Main, 18)
-MainStroke = accentStroke(Main, 0.5)
-
-Scale = create("UIScale", {
-    Scale = CONFIG.MenuSize
-}, Main)
-
-local function updateResponsiveScale()
-    local camera = workspace.CurrentCamera
-
-    if not camera then
-        Scale.Scale = CONFIG.MenuSize
+local function fit()
+    local cam = workspace.CurrentCamera
+    if not cam then
+        scale.Scale = cf.size
         return
     end
-
-    local viewport = camera.ViewportSize
-    local fitX = math.max(0.4, (viewport.X - 24) / 700)
-    local fitY = math.max(0.4, (viewport.Y - 24) / 460)
-    Scale.Scale = math.min(CONFIG.MenuSize, fitX, fitY)
+    local v = cam.ViewportSize
+    scale.Scale = math.min(cf.size, math.max(0.4, (v.X - 24) / 700), math.max(0.4, (v.Y - 24) / 460))
 end
 
-local CameraConnection
-
-local function watchCamera()
-    if CameraConnection then
-        CameraConnection:Disconnect()
-        CameraConnection = nil
+local function watch()
+    if camconn then
+        camconn:Disconnect()
+        camconn = nil
     end
-
-    local camera = workspace.CurrentCamera
-
-    if camera then
-        CameraConnection = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateResponsiveScale)
+    local cam = workspace.CurrentCamera
+    if cam then
+        camconn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
     end
-
-    updateResponsiveScale()
+    fit()
 end
 
-Sidebar = create("Frame", {
-    Size = UDim2.new(0, 175, 1, 0),
-    BackgroundColor3 = Colors.Panel,
-    BorderSizePixel = 0
-}, Main)
+side = mk("Frame", {Size = UDim2.new(0, 175, 1, 0), BackgroundColor3 = col.panel, BorderSizePixel = 0}, main)
+rc(side, 18)
+mk("Frame", {Size = UDim2.new(0, 18, 1, 0), Position = UDim2.new(1, -18, 0, 0), BackgroundColor3 = col.panel, BorderSizePixel = 0}, side)
 
-corner(Sidebar, 18)
-
-create("Frame", {
-    Size = UDim2.new(0, 18, 1, 0),
-    Position = UDim2.new(1, -18, 0, 0),
-    BackgroundColor3 = Colors.Panel,
-    BorderSizePixel = 0
-}, Sidebar)
-
-local function imageFallback(image, size)
-    local label = text("TextLabel", {
-        Size = UDim2.fromScale(1, 1),
-        BackgroundTransparency = 1,
-        Text = "CAT",
-        TextColor3 = Colors.Text,
-        TextSize = size,
-        ZIndex = 2,
-        Visible = not image.IsLoaded
-    }, image, true)
-
-    image:GetPropertyChangedSignal("IsLoaded"):Connect(function()
-        label.Visible = not image.IsLoaded
-    end)
+local function fallback(img, size)
+    local l = tx("TextLabel", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "CAT", TextColor3 = col.text, TextSize = size, ZIndex = 2, Visible = not img.IsLoaded}, img, true)
+    table.insert(life, img:GetPropertyChangedSignal("IsLoaded"):Connect(function()
+        l.Visible = not img.IsLoaded
+    end))
 end
 
-local Avatar = create("ImageButton", {
-    Size = UDim2.fromOffset(54, 54),
-    Position = UDim2.fromOffset(18, 20),
-    BackgroundColor3 = Colors.Card,
-    Image = "rbxassetid://" .. CONFIG.AvatarId,
-    ScaleType = Enum.ScaleType.Crop,
-    AutoButtonColor = false
-}, Sidebar)
+local av = mk("ImageButton", {Size = UDim2.fromOffset(54, 54), Position = UDim2.fromOffset(18, 20), BackgroundColor3 = col.card, Image = "rbxassetid://" .. cf.avatar, ScaleType = Enum.ScaleType.Crop, AutoButtonColor = false}, side)
+rc(av, 16)
+fallback(av, 14)
+tx("TextLabel", {Size = UDim2.new(1, -25, 0, 24), Position = UDim2.fromOffset(18, 82), BackgroundTransparency = 1, Text = "CAT SETTINGS", TextColor3 = col.text, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left}, side, true)
+nav = mk("Frame", {Size = UDim2.new(1, -20, 1, -126), Position = UDim2.fromOffset(10, 116), BackgroundTransparency = 1}, side)
+mk("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, nav)
+body = mk("Frame", {Size = UDim2.new(1, -195, 1, -28), Position = UDim2.fromOffset(185, 14), BackgroundTransparency = 1}, main)
+head = mk("Frame", {Size = UDim2.new(1, 0, 0, 48), BackgroundTransparency = 1}, body)
+title = tx("TextLabel", {Size = UDim2.new(1, -100, 0, 32), Position = UDim2.fromOffset(4, 0), BackgroundTransparency = 1, Text = "Performance", TextColor3 = col.text, TextSize = 20, TextXAlignment = Enum.TextXAlignment.Left}, head, true)
+minb = tx("TextButton", {Size = UDim2.fromOffset(32, 32), Position = UDim2.new(1, -76, 0, 0), BackgroundColor3 = col.card, Text = "−", TextColor3 = col.text, TextSize = 20, AutoButtonColor = false}, head, true)
+rc(minb, 9)
+closeb = tx("TextButton", {Size = UDim2.fromOffset(32, 32), Position = UDim2.new(1, -36, 0, 0), BackgroundColor3 = col.card, Text = "×", TextColor3 = col.text, TextSize = 20, AutoButtonColor = false}, head, true)
+rc(closeb, 9)
+holder = mk("ScrollingFrame", {Size = UDim2.new(1, 0, 1, -55), Position = UDim2.fromOffset(0, 55), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 3, ScrollBarImageColor3 = col.acc, ScrollingDirection = Enum.ScrollingDirection.Y, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new()}, body)
+mk("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, holder)
+mk("UIPadding", {PaddingBottom = UDim.new(0, 12)}, holder)
 
-corner(Avatar, 16)
-imageFallback(Avatar, 14)
+local sl, spos = {}, {}
 
-text("TextLabel", {
-    Size = UDim2.new(1, -25, 0, 24),
-    Position = UDim2.fromOffset(18, 82),
-    BackgroundTransparency = 1,
-    Text = "CAT SETTINGS",
-    TextColor3 = Colors.Text,
-    TextSize = 15,
-    TextXAlignment = Enum.TextXAlignment.Left
-}, Sidebar, true)
+local function stat(k, y, init)
+    local p = UDim2.new(1, -125, 0, y)
+    local l = tx("TextLabel", {Size = UDim2.fromOffset(110, 28), Position = p, BackgroundColor3 = col.card, BackgroundTransparency = 0.1, Text = init, TextColor3 = col.green, TextSize = 12, Visible = false}, gui, true)
+    rc(l, 9)
+    drag(l, l, false)
+    sl[k], spos[k] = l, p
+end
+stat("fps", 12, "FPS: --")
+stat("png", 46, "PING: --")
+stat("mem", 80, "MEM: --")
 
-Navigation = create("Frame", {
-    Size = UDim2.new(1, -20, 1, -126),
-    Position = UDim2.fromOffset(10, 116),
-    BackgroundTransparency = 1
-}, Sidebar)
+toast = tx("TextLabel", {Size = UDim2.fromOffset(280, 40), AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, -60), BackgroundColor3 = col.card, BackgroundTransparency = 0.05, TextColor3 = col.text, Text = "", TextSize = 13, ZIndex = 20, Visible = false}, gui, false)
+rc(toast, 12)
+ast(toast, 0.6)
 
-create("UIListLayout", {
-    Padding = UDim.new(0, 6),
-    SortOrder = Enum.SortOrder.LayoutOrder
-}, Navigation)
-
-Content = create("Frame", {
-    Size = UDim2.new(1, -195, 1, -28),
-    Position = UDim2.fromOffset(185, 14),
-    BackgroundTransparency = 1
-}, Main)
-
-Header = create("Frame", {
-    Size = UDim2.new(1, 0, 0, 48),
-    BackgroundTransparency = 1
-}, Content)
-
-PageTitle = text("TextLabel", {
-    Size = UDim2.new(1, -100, 0, 32),
-    Position = UDim2.fromOffset(4, 0),
-    BackgroundTransparency = 1,
-    Text = "Performance",
-    TextColor3 = Colors.Text,
-    TextSize = 20,
-    TextXAlignment = Enum.TextXAlignment.Left
-}, Header, true)
-
-MinimizeButton = text("TextButton", {
-    Size = UDim2.fromOffset(32, 32),
-    Position = UDim2.new(1, -76, 0, 0),
-    BackgroundColor3 = Colors.Card,
-    Text = "−",
-    TextColor3 = Colors.Text,
-    TextSize = 20,
-    AutoButtonColor = false
-}, Header, true)
-
-corner(MinimizeButton, 9)
-
-CloseButton = text("TextButton", {
-    Size = UDim2.fromOffset(32, 32),
-    Position = UDim2.new(1, -36, 0, 0),
-    BackgroundColor3 = Colors.Card,
-    Text = "×",
-    TextColor3 = Colors.Text,
-    TextSize = 20,
-    AutoButtonColor = false
-}, Header, true)
-
-corner(CloseButton, 9)
-
-PageHolder = create("ScrollingFrame", {
-    Size = UDim2.new(1, 0, 1, -55),
-    Position = UDim2.fromOffset(0, 55),
-    BackgroundTransparency = 1,
-    BorderSizePixel = 0,
-    ScrollBarThickness = 3,
-    ScrollBarImageColor3 = Colors.Accent,
-    ScrollingDirection = Enum.ScrollingDirection.Y,
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    CanvasSize = UDim2.new()
-}, Content)
-
-create("UIListLayout", {
-    Padding = UDim.new(0, 8),
-    SortOrder = Enum.SortOrder.LayoutOrder
-}, PageHolder)
-
-create("UIPadding", {
-    PaddingBottom = UDim.new(0, 12)
-}, PageHolder)
-
-local StatLabels = {}
-local StatPositions = {}
-
-local function makeStat(key, y, initialText)
-    local position = UDim2.new(1, -125, 0, y)
-
-    local label = text("TextLabel", {
-        Size = UDim2.fromOffset(110, 28),
-        Position = position,
-        BackgroundColor3 = Colors.Card,
-        BackgroundTransparency = 0.1,
-        Text = initialText,
-        TextColor3 = Colors.Green,
-        TextSize = 12,
-        Visible = false
-    }, ScreenGui, true)
-
-    corner(label, 9)
-    makeDraggable(label, label)
-
-    StatLabels[key] = label
-    StatPositions[key] = position
+local function curatm()
+    return lt:FindFirstChild("CatAtmosphere") or lt:FindFirstChildOfClass("Atmosphere")
 end
 
-makeStat("FPS", 12, "FPS: --")
-makeStat("Ping", 46, "PING: --")
-makeStat("Memory", 80, "MEM: --")
-
-Toast = text("TextLabel", {
-    Size = UDim2.fromOffset(280, 40),
-    AnchorPoint = Vector2.new(0.5, 0),
-    Position = UDim2.new(0.5, 0, 0, -60),
-    BackgroundColor3 = Colors.Card,
-    BackgroundTransparency = 0.05,
-    TextColor3 = Colors.Text,
-    Text = "",
-    TextSize = 13,
-    ZIndex = 20,
-    Visible = false
-}, ScreenGui, false)
-
-corner(Toast, 12)
-accentStroke(Toast, 0.6)
-
-local function getAtmosphereObject()
-    local cat = Lighting:FindFirstChild("CatAtmosphere")
-
-    if cat then
-        return cat
-    end
-
-    return Lighting:FindFirstChildOfClass("Atmosphere")
+local function cursky()
+    return lt:FindFirstChild("CatSky") or lt:FindFirstChildOfClass("Sky")
 end
 
-local function getSkyObject()
-    local cat = Lighting:FindFirstChild("CatSky")
-
-    if cat then
-        return cat
-    end
-
-    return Lighting:FindFirstChildOfClass("Sky")
-end
-
-local function readProperty(object, property, default)
-    if object then
-        local ok, value = pcall(function()
-            return object[property]
+local function rp(o, p, d)
+    if o then
+        local ok, v = pcall(function()
+            return o[p]
         end)
-
-        if ok and value ~= nil then
-            return value
+        if ok and v ~= nil then
+            return v
         end
     end
-
-    return default
+    return d
 end
 
-local function hideGame(className, store, keepName)
-    for _, object in ipairs(Lighting:GetChildren()) do
-        if object:IsA(className) and object.Name ~= keepName then
-            table.insert(store, object)
-            object.Parent = nil
+local function hide(cls, store, keep)
+    for _, o in ipairs(lt:GetChildren()) do
+        if o:IsA(cls) and o.Name ~= keep then
+            table.insert(store, o)
+            o.Parent = nil
         end
     end
 end
 
-local SkyProps = {
-    "SkyboxBk",
-    "SkyboxDn",
-    "SkyboxFt",
-    "SkyboxLf",
-    "SkyboxRt",
-    "SkyboxUp",
-    "StarCount",
-    "CelestialBodiesShown",
-    "SunAngularSize",
-    "MoonAngularSize",
-    "SunTextureId",
-    "MoonTextureId"
-}
+local skyprops = {"SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp", "StarCount", "CelestialBodiesShown", "SunAngularSize", "MoonAngularSize", "SunTextureId", "MoonTextureId", "SkyboxOrientation"}
+local atmprops = {"Density", "Offset", "Color", "Decay", "Glare", "Haze"}
 
-local AtmosphereProps = {"Density", "Offset", "Color", "Decay", "Glare", "Haze"}
-
-local function getCatSky(fresh)
-    local existing = Lighting:FindFirstChild("CatSky")
-
-    if existing and not fresh then
-        return existing
+local function catsky(fresh)
+    local e = lt:FindFirstChild("CatSky")
+    if e and not fresh then
+        return e
     end
-
-    if existing then
-        existing:Destroy()
+    if e then
+        e:Destroy()
     end
-
-    local sky = Instance.new("Sky")
-    sky.Name = "CatSky"
-
+    local sk = Instance.new("Sky")
+    sk.Name = "CatSky"
     if not fresh then
-        local source = Lighting:FindFirstChildOfClass("Sky")
-
-        if source then
-            for _, property in ipairs(SkyProps) do
+        local src = lt:FindFirstChildOfClass("Sky")
+        if src then
+            for _, p in ipairs(skyprops) do
                 pcall(function()
-                    sky[property] = source[property]
+                    sk[p] = src[p]
                 end)
             end
         end
     end
-
-    hideGame("Sky", HiddenSky, "CatSky")
-    sky.Parent = Lighting
-    return sky
+    hide("Sky", hsky, "CatSky")
+    sk.Parent = lt
+    return sk
 end
 
-local function getCatAtmosphere()
-    local existing = Lighting:FindFirstChild("CatAtmosphere")
-
-    if existing then
-        return existing
+local function catatm()
+    local e = lt:FindFirstChild("CatAtmosphere")
+    if e then
+        return e
     end
-
-    local atmosphere = Instance.new("Atmosphere")
-    atmosphere.Name = "CatAtmosphere"
-
-    local source = Lighting:FindFirstChildOfClass("Atmosphere")
-
-    if source then
-        for _, property in ipairs(AtmosphereProps) do
+    local a = Instance.new("Atmosphere")
+    a.Name = "CatAtmosphere"
+    local src = lt:FindFirstChildOfClass("Atmosphere")
+    if src then
+        for _, p in ipairs(atmprops) do
             pcall(function()
-                atmosphere[property] = source[property]
+                a[p] = src[p]
             end)
         end
     end
-
-    hideGame("Atmosphere", HiddenAtmosphere, "CatAtmosphere")
-    atmosphere.Parent = Lighting
-    return atmosphere
+    hide("Atmosphere", hatm, "CatAtmosphere")
+    a.Parent = lt
+    return a
 end
 
-local function setAtmosphere(property, value)
-    getCatAtmosphere()[property] = value
-end
-
-local function setClock(value)
-    Lighting.ClockTime = value
-    Settings.LockedTime = value
-end
-
-local function applyShadows()
-    local base = OriginalLighting.GlobalShadows
-
-    if base == nil then
-        base = true
-    end
-
+local function setatm(p, v)
     pcall(function()
-        Lighting.GlobalShadows = base and not Settings.Shadows
+        catatm()[p] = v
     end)
 end
 
-local function applyFog(enabled)
-    Settings.Fog = enabled
+local function lockclock()
+    if lockconn then
+        lockconn:Disconnect()
+        lockconn = nil
+    end
+    if s.lck and not dead then
+        lockconn = lt:GetPropertyChangedSignal("ClockTime"):Connect(function()
+            if s.lck and math.abs(lt.ClockTime - s.lckt) > 0.001 then
+                lt.ClockTime = s.lckt
+            end
+        end)
+    end
+end
 
-    if enabled then
-        Lighting.FogStart = OriginalLighting.FogStart or Lighting.FogStart
-        Lighting.FogEnd = OriginalLighting.FogEnd or Lighting.FogEnd
+local function setclock(v)
+    s.lckt = v
+    lt.ClockTime = v
+end
+
+local function shadows()
+    local b = olt.GlobalShadows
+    if b == nil then
+        b = true
+    end
+    pcall(function()
+        lt.GlobalShadows = b and not s.shd
+    end)
+end
+
+local function fog(on)
+    s.fog = on
+    if on then
+        lt.FogStart = olt.FogStart or lt.FogStart
+        lt.FogEnd = olt.FogEnd or lt.FogEnd
     else
-        Lighting.FogStart = 100000
-        Lighting.FogEnd = 100000
+        lt.FogStart = 100000
+        lt.FogEnd = 100000
     end
 end
 
-local SkyPresets = {
-    {Name = "REALISTIC DAY", Clock = 13, Brightness = 3, Ambient = Color3.fromRGB(170, 180, 200), Outdoor = Color3.fromRGB(190, 195, 205), Fog = Color3.fromRGB(180, 215, 245)},
-    {Name = "SUNRISE", Clock = 6.2, Brightness = 2.4, Ambient = Color3.fromRGB(150, 130, 140), Outdoor = Color3.fromRGB(200, 160, 150), Fog = Color3.fromRGB(255, 190, 150)},
-    {Name = "GOLDEN HOUR", Clock = 17, Brightness = 2.8, Ambient = Color3.fromRGB(180, 140, 115), Outdoor = Color3.fromRGB(210, 155, 120), Fog = Color3.fromRGB(255, 180, 125)},
-    {Name = "SUNSET", Clock = 18.3, Brightness = 2.5, Ambient = Color3.fromRGB(145, 105, 130), Outdoor = Color3.fromRGB(190, 130, 140), Fog = Color3.fromRGB(245, 145, 135)},
-    {Name = "EVENING", Clock = 19.5, Brightness = 2, Ambient = Color3.fromRGB(100, 105, 145), Outdoor = Color3.fromRGB(125, 135, 180), Fog = Color3.fromRGB(100, 120, 175)},
-    {Name = "NIGHT", Clock = 0, Brightness = 1.5, Ambient = Color3.fromRGB(65, 75, 115), Outdoor = Color3.fromRGB(90, 105, 150), Fog = Color3.fromRGB(35, 45, 90)},
-    {Name = "MOONLIGHT", Clock = 0, Brightness = 1.2, Ambient = Color3.fromRGB(50, 60, 100), Outdoor = Color3.fromRGB(70, 85, 130), Fog = Color3.fromRGB(25, 35, 75)},
-    {Name = "CLOUDY", Clock = 12, Brightness = 2, Ambient = Color3.fromRGB(130, 140, 150), Outdoor = Color3.fromRGB(160, 170, 180), Fog = Color3.fromRGB(145, 160, 180)}
+local pskies = {
+    {n = "REALISTIC DAY", t = 13, b = 3, a = Color3.fromRGB(170, 180, 200), o = Color3.fromRGB(190, 195, 205), f = Color3.fromRGB(180, 215, 245)},
+    {n = "SUNRISE", t = 6.2, b = 2.4, a = Color3.fromRGB(150, 130, 140), o = Color3.fromRGB(200, 160, 150), f = Color3.fromRGB(255, 190, 150)},
+    {n = "GOLDEN HOUR", t = 17, b = 2.8, a = Color3.fromRGB(180, 140, 115), o = Color3.fromRGB(210, 155, 120), f = Color3.fromRGB(255, 180, 125)},
+    {n = "SUNSET", t = 18.3, b = 2.5, a = Color3.fromRGB(145, 105, 130), o = Color3.fromRGB(190, 130, 140), f = Color3.fromRGB(245, 145, 135)},
+    {n = "EVENING", t = 19.5, b = 2, a = Color3.fromRGB(100, 105, 145), o = Color3.fromRGB(125, 135, 180), f = Color3.fromRGB(100, 120, 175)},
+    {n = "NIGHT", t = 0, b = 1.5, a = Color3.fromRGB(65, 75, 115), o = Color3.fromRGB(90, 105, 150), f = Color3.fromRGB(35, 45, 90)},
+    {n = "MOONLIGHT", t = 0, b = 1.2, a = Color3.fromRGB(50, 60, 100), o = Color3.fromRGB(70, 85, 130), f = Color3.fromRGB(25, 35, 75)},
+    {n = "CLOUDY", t = 12, b = 2, a = Color3.fromRGB(130, 140, 150), o = Color3.fromRGB(160, 170, 180), f = Color3.fromRGB(145, 160, 180)}
 }
 
-local SpacePresets = {
-    {Name = "MILKY WAY", Color = Color3.fromRGB(55, 65, 110)},
-    {Name = "DEEP SPACE", Color = Color3.fromRGB(35, 40, 85)},
-    {Name = "NEBULA", Color = Color3.fromRGB(100, 55, 140)},
-    {Name = "AURORA", Color = Color3.fromRGB(40, 115, 110)},
-    {Name = "GALAXY", Color = Color3.fromRGB(80, 45, 125)}
+local pspace = {
+    {n = "MILKY WAY", c = Color3.fromRGB(55, 65, 110)},
+    {n = "DEEP SPACE", c = Color3.fromRGB(35, 40, 85)},
+    {n = "NEBULA", c = Color3.fromRGB(100, 55, 140)},
+    {n = "AURORA", c = Color3.fromRGB(40, 115, 110)},
+    {n = "GALAXY", c = Color3.fromRGB(80, 45, 125)}
 }
 
-local EffectDefs = {
-    Bloom = {Class = "BloomEffect", Name = "CatBloom", Defaults = {Intensity = 0.35, Size = 32, Threshold = 1}},
-    Blur = {Class = "BlurEffect", Name = "CatBlur", Defaults = {Size = 8}},
-    SunRays = {Class = "SunRaysEffect", Name = "CatSunRays", Defaults = {Intensity = 0.25, Spread = 1}},
-    DoF = {Class = "DepthOfFieldEffect", Name = "CatDoF", Defaults = {FarIntensity = 0.3, FocusDistance = 50, InFocusRadius = 30, NearIntensity = 0}}
+local ed = {
+    bloom = {c = "BloomEffect", n = "CatBloom", d = {Intensity = 0.35, Size = 32, Threshold = 1}},
+    blur = {c = "BlurEffect", n = "CatBlur", d = {Size = 8}},
+    rays = {c = "SunRaysEffect", n = "CatSunRays", d = {Intensity = 0.25, Spread = 1}},
+    dof = {c = "DepthOfFieldEffect", n = "CatDoF", d = {FarIntensity = 0.3, FocusDistance = 50, InFocusRadius = 30, NearIntensity = 0}}
 }
 
-local EffectValues = {}
-
-for key, definition in pairs(EffectDefs) do
-    EffectValues[key] = table.clone(definition.Defaults)
+local ev = {}
+for k, d in pairs(ed) do
+    ev[k] = table.clone(d.d)
 end
 
-local ColorValues = {
-    Brightness = 0,
-    Contrast = 0,
-    Saturation = 0,
-    TintColor = Color3.new(1, 1, 1)
-}
+local cv = {Brightness = 0, Contrast = 0, Saturation = 0, TintColor = Color3.new(1, 1, 1)}
 
-local function setEffect(key, enabled)
-    local definition = EffectDefs[key]
-    local effect = Lighting:FindFirstChild(definition.Name)
-    Settings[key] = enabled
-
-    if enabled then
-        if not effect then
-            effect = Instance.new(definition.Class)
-            effect.Name = definition.Name
-            effect.Parent = Lighting
+local function seteffect(k, on)
+    local d = ed[k]
+    local e = lt:FindFirstChild(d.n)
+    s[k] = on
+    if on then
+        if not e then
+            e = Instance.new(d.c)
+            e.Name = d.n
+            e.Parent = lt
         end
-
-        for property, value in pairs(EffectValues[key]) do
-            effect[property] = value
+        for p, v in pairs(ev[k]) do
+            e[p] = v
         end
-    elseif effect then
-        effect:Destroy()
+    elseif e then
+        e:Destroy()
     end
 end
 
-local function setEffectValue(key, property, value)
-    EffectValues[key][property] = value
-
-    local effect = Lighting:FindFirstChild(EffectDefs[key].Name)
-
-    if effect then
-        effect[property] = value
+local function setev(k, p, v)
+    ev[k][p] = v
+    local e = lt:FindFirstChild(ed[k].n)
+    if e then
+        e[p] = v
     end
 end
 
-local function setColorValue(property, value)
-    ColorValues[property] = value
-
-    local effect = Lighting:FindFirstChild("CatColorCorrection")
-
-    if not effect then
-        effect = Instance.new("ColorCorrectionEffect")
-        effect.Name = "CatColorCorrection"
-        effect.Parent = Lighting
+local function setcc(p, v)
+    cv[p] = v
+    local e = lt:FindFirstChild("CatColorCorrection")
+    if not e then
+        e = Instance.new("ColorCorrectionEffect")
+        e.Name = "CatColorCorrection"
+        e.Parent = lt
     end
-
-    for name, current in pairs(ColorValues) do
-        effect[name] = current
+    for n, x in pairs(cv) do
+        e[n] = x
     end
 end
 
-local OriginalFOV
+local ofov
 
-local function setFOV(enabled)
-    local camera = workspace.CurrentCamera
-    Settings.CustomFOV = enabled
+local function fovbind()
+    pcall(function()
+        rs:UnbindFromRenderStep("CatSettingsFOV")
+    end)
+    if s.cfov and not dead then
+        rs:BindToRenderStep("CatSettingsFOV", Enum.RenderPriority.Camera.Value + 1, function()
+            local cam = workspace.CurrentCamera
+            if cam and cam.FieldOfView ~= s.fov then
+                cam.FieldOfView = s.fov
+            end
+        end)
+    end
+end
 
-    if enabled then
-        if camera and not OriginalFOV then
-            OriginalFOV = camera.FieldOfView
+local function setfov(on)
+    local cam = workspace.CurrentCamera
+    s.cfov = on
+    if on and cam and not ofov then
+        ofov = cam.FieldOfView
+    end
+    fovbind()
+    if not on and cam and ofov then
+        cam.FieldOfView = ofov
+        ofov = nil
+    end
+end
+
+local gtok = 0
+
+local function glide(list, dur)
+    gtok += 1
+    local id = gtok
+    dur = dur or s.gl
+    if dur <= 0 then
+        for _, d in ipairs(list) do
+            if d[2] == "ClockTime" then
+                s.lckt = d[3]
+            end
+            d[1][d[2]] = d[3]
         end
-    elseif camera and OriginalFOV then
-        camera.FieldOfView = OriginalFOV
-        OriginalFOV = nil
+        return
     end
-end
-
-local function applySkyPreset(preset)
-    getCatSky(true)
-
-    setClock(preset.Clock)
-    Lighting.Brightness = preset.Brightness
-    Lighting.Ambient = preset.Ambient
-    Lighting.OutdoorAmbient = preset.Outdoor
-    Lighting.FogColor = preset.Fog
-
-    local atmosphere = getCatAtmosphere()
-    atmosphere.Density = 0.25
-    atmosphere.Haze = 1
-    atmosphere.Glare = 0.2
-    atmosphere.Offset = 0.1
-    atmosphere.Color = preset.Fog
-    atmosphere.Decay = Color3.fromRGB(90, 100, 130)
-
-    notify(preset.Name .. " applied")
-    refreshPage()
-end
-
-local function applySpace(preset)
-    local sky = getCatSky(true)
-    sky.StarCount = 5000
-    sky.SunAngularSize = 0
-    sky.MoonAngularSize = 11
-    sky.CelestialBodiesShown = true
-
-    setClock(0)
-    Lighting.Brightness = 1.5
-    Lighting.Ambient = preset.Color
-    Lighting.OutdoorAmbient = preset.Color
-    Lighting.FogColor = preset.Color
-
-    local atmosphere = getCatAtmosphere()
-    atmosphere.Density = 0.05
-    atmosphere.Haze = 0
-    atmosphere.Color = preset.Color
-
-    notify(preset.Name .. " applied")
-    refreshPage()
-end
-
-local function applyCustomSky(entry)
-    local sky = getCatSky(true)
-    local faces = {"SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp"}
-
-    for index, face in ipairs(faces) do
-        local id = entry.Ids[index] or entry.Ids[1]
-        sky[face] = "rbxassetid://" .. id
+    local from = {}
+    for i, d in ipairs(list) do
+        from[i] = d[1][d[2]]
     end
-
-    notify(entry.Name .. " applied")
-    refreshPage()
+    local t = 0
+    local con
+    con = rs.Heartbeat:Connect(function(dt)
+        if dead or id ~= gtok then
+            con:Disconnect()
+            return
+        end
+        t += dt
+        local a = math.min(t / dur, 1)
+        a = a * a * (3 - 2 * a)
+        for i, d in ipairs(list) do
+            local f, g, v = from[i], d[3], nil
+            if typeof(g) == "Color3" then
+                v = f:Lerp(g, a)
+            elseif d[2] == "ClockTime" then
+                v = (f + ((g - f + 12) % 24 - 12) * a) % 24
+                s.lckt = v
+            else
+                v = f + (g - f) * a
+            end
+            d[1][d[2]] = v
+        end
+        if a >= 1 then
+            con:Disconnect()
+        end
+    end)
 end
 
-local function parseIds(value)
+local function run(fn)
+    if s.gl <= 0 or dead then
+        fn()
+        return
+    end
+    tn(fade, {BackgroundTransparency = 0.45}, 0.25)
+    task.delay(0.28, function()
+        if dead then
+            return
+        end
+        fn()
+        tn(fade, {BackgroundTransparency = 1}, 0.6)
+    end)
+end
+
+local function applysky(p)
+    run(function()
+        catsky(true)
+        local a = catatm()
+        glide({
+            {lt, "ClockTime", p.t}, {lt, "Brightness", p.b}, {lt, "Ambient", p.a}, {lt, "OutdoorAmbient", p.o}, {lt, "FogColor", p.f},
+            {a, "Density", 0.25}, {a, "Haze", 1}, {a, "Glare", 0.2}, {a, "Offset", 0.1}, {a, "Color", p.f}, {a, "Decay", Color3.fromRGB(90, 100, 130)}
+        })
+    end)
+    notify(p.n .. " applied")
+    refresh()
+end
+
+local function applyspace(p)
+    run(function()
+        local sk = catsky(true)
+        sk.StarCount = 5000
+        sk.SunAngularSize = 0
+        sk.MoonAngularSize = 11
+        sk.CelestialBodiesShown = true
+        local a = catatm()
+        glide({
+            {lt, "ClockTime", 0}, {lt, "Brightness", 1.5}, {lt, "Ambient", p.c}, {lt, "OutdoorAmbient", p.c}, {lt, "FogColor", p.c},
+            {a, "Density", 0.05}, {a, "Haze", 0}, {a, "Color", p.c}
+        })
+    end)
+    notify(p.n .. " applied")
+    refresh()
+end
+
+local faces = {"SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp"}
+
+local function applycustom(e)
+    run(function()
+        local sk = catsky(true)
+        for i, f in ipairs(faces) do
+            sk[f] = "rbxassetid://" .. (e.Ids[i] or e.Ids[1])
+        end
+    end)
+    notify(e.Name .. " applied")
+    refresh()
+end
+
+local lroot, lcache = "CatSkies", "CatSkiesCache"
+local fk = {bk = "SkyboxBk", dn = "SkyboxDn", ft = "SkyboxFt", lf = "SkyboxLf", rt = "SkyboxRt", up = "SkyboxUp"}
+local lfs = cs and type(isfolder) == "function" and type(listfiles) == "function" and type(makefolder) == "function" and type(getcustomasset) == "function"
+local lsk
+
+local function scanlocal()
+    lsk = {}
+    if not lfs then
+        return
+    end
+    local function walk(dir, depth)
+        local fl, n, subs = {}, 0, {}
+        for _, fp in ipairs(listfiles(dir)) do
+            if isfolder(fp) then
+                table.insert(subs, fp)
+            else
+                local k = fp:lower():match("[_%-%s](%a%a)%.%w+$")
+                if k and fk[k] then
+                    if not fl[k] then
+                        n += 1
+                    end
+                    fl[k] = fp
+                end
+            end
+        end
+        if n == 6 then
+            table.insert(lsk, {n = dir:match("[^/\\]+$") or dir, f = fl})
+        end
+        if depth < 3 then
+            for _, sd in ipairs(subs) do
+                walk(sd, depth + 1)
+            end
+        end
+    end
+    pcall(function()
+        if not isfolder(lroot) then
+            makefolder(lroot)
+        end
+        walk(lroot, 0)
+    end)
+    table.sort(lsk, function(a, b)
+        return a.n < b.n
+    end)
+end
+
+local function applylocal(e)
+    task.spawn(function()
+        local ok = pcall(function()
+            local base = e.n:gsub("[^%w]", "_")
+            if not isfolder(lcache) then
+                makefolder(lcache)
+            end
+            local urls = {}
+            for k, prop in pairs(fk) do
+                local dst = lcache .. "/" .. base .. "_" .. k .. ".png"
+                if not isfile(dst) then
+                    writefile(dst, readfile(e.f[k]))
+                end
+                urls[prop] = getcustomasset(dst)
+            end
+            run(function()
+                local sk = catsky(true)
+                for prop, u in pairs(urls) do
+                    sk[prop] = u
+                end
+            end)
+        end)
+        notify(ok and (e.n .. " applied") or "Local sky failed")
+        if ok then
+            refresh()
+        end
+    end)
+end
+
+local function randomsky()
+    if lfs and not lsk then
+        scanlocal()
+    end
+    local pool = {}
+    for _, p in ipairs(pskies) do
+        table.insert(pool, function()
+            applysky(p)
+        end)
+    end
+    for _, p in ipairs(pspace) do
+        table.insert(pool, function()
+            applyspace(p)
+        end)
+    end
+    for _, e in ipairs(sv.skies) do
+        table.insert(pool, function()
+            applycustom(e)
+        end)
+    end
+    for _, e in ipairs(lsk or {}) do
+        table.insert(pool, function()
+            applylocal(e)
+        end)
+    end
+    pool[math.random(#pool)]()
+end
+
+local function pids(v)
     local ids = {}
-
-    for token in tostring(value):gmatch("[^,%s;]+") do
-        local id = normalizeId(token)
-
-        if not id then
+    for t in tostring(v):gmatch("[^,%s;]+") do
+        local i = nid(t)
+        if not i then
             return nil
         end
-
-        table.insert(ids, id)
+        table.insert(ids, i)
     end
-
     if #ids == 1 or #ids == 6 then
         return ids
     end
-
     return nil
 end
 
-local function restoreLighting(silent)
-    local catSky = Lighting:FindFirstChild("CatSky")
-
-    if catSky then
-        catSky:Destroy()
+local function rlight(q)
+    gtok += 1
+    s.spin = 0
+    s.flow = 0
+    local a = lt:FindFirstChild("CatSky")
+    if a then
+        a:Destroy()
     end
-
-    local catAtmosphere = Lighting:FindFirstChild("CatAtmosphere")
-
-    if catAtmosphere then
-        catAtmosphere:Destroy()
+    local b = lt:FindFirstChild("CatAtmosphere")
+    if b then
+        b:Destroy()
     end
-
-    for _, object in ipairs(HiddenSky) do
+    for _, o in ipairs(hsky) do
         pcall(function()
-            object.Parent = Lighting
+            o.Parent = lt
         end)
     end
-
-    for _, object in ipairs(HiddenAtmosphere) do
+    for _, o in ipairs(hatm) do
         pcall(function()
-            object.Parent = Lighting
+            o.Parent = lt
         end)
     end
-
-    table.clear(HiddenSky)
-    table.clear(HiddenAtmosphere)
-
-    for property, value in pairs(OriginalLighting) do
+    table.clear(hsky)
+    table.clear(hatm)
+    for p, v in pairs(olt) do
         pcall(function()
-            Lighting[property] = value
+            lt[p] = v
         end)
     end
-
-    Settings.Fog = true
-    Settings.LockTime = false
-    Settings.LockedTime = Lighting.ClockTime
-    applyShadows()
-
-    if not silent then
+    s.fog = true
+    s.lck = false
+    s.lckt = lt.ClockTime
+    lockclock()
+    shadows()
+    if not q then
         notify("Lighting restored")
     end
 end
 
-local function restoreEffects()
-    for key in pairs(EffectDefs) do
-        setEffect(key, false)
-        EffectValues[key] = table.clone(EffectDefs[key].Defaults)
+local function reffects(q)
+    for k in pairs(ed) do
+        seteffect(k, false)
+        ev[k] = table.clone(ed[k].d)
     end
-
-    local correction = Lighting:FindFirstChild("CatColorCorrection")
-
-    if correction then
-        correction:Destroy()
+    local cc = lt:FindFirstChild("CatColorCorrection")
+    if cc then
+        cc:Destroy()
     end
-
-    ColorValues.Brightness = 0
-    ColorValues.Contrast = 0
-    ColorValues.Saturation = 0
-    ColorValues.TintColor = Color3.new(1, 1, 1)
-
-    setFOV(false)
+    cv.Brightness, cv.Contrast, cv.Saturation, cv.TintColor = 0, 0, 0, Color3.new(1, 1, 1)
+    setfov(false)
+    if not q then
+        notify("Effects reset")
+    end
 end
 
-local function graphicsKind(object)
-    if object:IsA("ParticleEmitter") or object:IsA("Trail") or object:IsA("Beam") then
-        return "Emitter"
+local function kind(o)
+    if not o or not o.Parent then
+        return nil
     end
-
-    if object:IsA("PostEffect") then
-        if object.Name:sub(1, 3) == "Cat" then
+    if o:IsA("ParticleEmitter") or o:IsA("Trail") or o:IsA("Beam") then
+        return "e"
+    end
+    if o:IsA("PostEffect") then
+        if o.Name:sub(1, 3) == "Cat" then
             return nil
         end
-
-        return "Post"
+        return "p"
     end
-
-    if object:IsA("Decal") then
-        if object.Name:lower() == "face" then
+    if o:IsA("Decal") then
+        if o.Name:lower() == "face" then
             return nil
         end
-
-        return "Decal"
+        return "d"
     end
-
-    if Settings.Materials and object:IsA("BasePart") and not object:IsA("Terrain") then
-        return "Part"
+    if s.mat and o:IsA("BasePart") and not o:IsA("Terrain") then
+        return "m"
     end
-
     return nil
 end
 
-local function captureObject(object, kind)
-    local existing = OriginalObjects[object]
-
-    if existing then
-        return existing
+local function capture(o, k)
+    local e = oobj[o]
+    if e then
+        return e
     end
-
-    local data
-
-    if kind == "Emitter" or kind == "Post" then
-        data = {Kind = kind, Enabled = object.Enabled}
-    elseif kind == "Decal" then
-        data = {Kind = kind, Transparency = object.Transparency}
-    elseif kind == "Part" then
-        data = {Kind = kind, Material = object.Material, Reflectance = object.Reflectance}
+    local d
+    if k == "e" or k == "p" then
+        d = {k = k, en = o.Enabled}
+    elseif k == "d" then
+        d = {k = k, t = o.Transparency}
+    elseif k == "m" then
+        d = {k = k, m = o.Material, r = o.Reflectance}
     end
-
-    OriginalObjects[object] = data
-    return data
+    oobj[o] = d
+    return d
 end
 
-local function applyData(object, data)
-    local kind = data.Kind
-
-    if kind == "Emitter" then
-        object.Enabled = data.Enabled and not Settings.Particles
-    elseif kind == "Post" then
-        object.Enabled = data.Enabled and not Settings.PostEffects
-    elseif kind == "Decal" then
-        object.Transparency = Settings.Textures and 1 or data.Transparency
-    elseif kind == "Part" then
-        if Settings.Materials then
-            object.Material = Enum.Material.SmoothPlastic
-            object.Reflectance = 0
+local function applyd(o, d)
+    local k = d.k
+    if k == "e" then
+        o.Enabled = d.en and not s.ptc
+    elseif k == "p" then
+        o.Enabled = d.en and not s.pst
+    elseif k == "d" then
+        o.Transparency = s.tex and 1 or d.t
+    elseif k == "m" then
+        if s.mat then
+            o.Material = Enum.Material.SmoothPlastic
+            o.Reflectance = 0
         else
-            object.Material = data.Material
-            object.Reflectance = data.Reflectance
+            o.Material = d.m
+            o.Reflectance = d.r
         end
     end
 end
 
-local function scanKind(kind)
+local function scan(k)
+    stok[k] = (stok[k] or 0) + 1
+    local tok = stok[k]
     task.spawn(function()
-        local count = 0
-
-        for _, object in ipairs(game:GetDescendants()) do
-            if shuttingDown or not Scanned[kind] then
-                return
-            end
-
-            if graphicsKind(object) == kind then
-                pcall(function()
-                    local data = captureObject(object, kind)
-
-                    if data then
-                        applyData(object, data)
-                    end
-                end)
-            end
-
-            count += 1
-
-            if count % 2000 == 0 then
-                task.wait()
+        local roots = k == "p" and {lt, workspace.CurrentCamera} or {workspace}
+        local t = os.clock()
+        for _, r in ipairs(roots) do
+            for _, o in ipairs(r:GetDescendants()) do
+                if dead or not scanned[k] or tok ~= stok[k] then
+                    return
+                end
+                if kind(o) == k then
+                    pcall(function()
+                        local d = capture(o, k)
+                        if d then
+                            applyd(o, d)
+                        end
+                    end)
+                end
+                if os.clock() - t > 0.003 then
+                    task.wait()
+                    t = os.clock()
+                end
             end
         end
     end)
 end
 
-local function setKind(kind)
-    if Settings[KindFlag[kind]] then
-        if not Scanned[kind] then
-            Scanned[kind] = true
-            scanKind(kind)
+local function setkind(k)
+    if s[kf[k]] then
+        if not scanned[k] then
+            scanned[k] = true
+            scan(k)
         end
     else
-        Scanned[kind] = nil
-
-        for object, data in pairs(OriginalObjects) do
-            if data.Kind == kind then
-                if object.Parent then
-                    pcall(applyData, object, data)
+        scanned[k] = nil
+        stok[k] = (stok[k] or 0) + 1
+        for o, d in pairs(oobj) do
+            if d.k == k then
+                if o.Parent then
+                    pcall(applyd, o, d)
                 end
-
-                OriginalObjects[object] = nil
+                oobj[o] = nil
             end
         end
     end
 end
 
-local function applyWater()
-    if not Terrain then
+local function water()
+    if not ter then
         return
     end
-
     pcall(function()
-        if Settings.SimpleWater then
-            Terrain.WaterWaveSize = 0
-            Terrain.WaterWaveSpeed = 0
-            Terrain.WaterReflectance = 0
+        if s.wtr then
+            ter.WaterWaveSize = 0
+            ter.WaterWaveSpeed = 0
+            ter.WaterReflectance = 0
         else
-            for property, value in pairs(OriginalWater) do
-                Terrain[property] = value
+            for p, v in pairs(owt) do
+                ter[p] = v
             end
         end
     end)
 end
 
-local function applyQuality()
+local function quality()
     pcall(function()
-        local rendering = settings().Rendering
-
-        if Settings.LowQuality then
-            rendering.QualityLevel = Enum.QualityLevel.Level01
-        elseif OriginalQuality then
-            rendering.QualityLevel = OriginalQuality
+        local r = settings().Rendering
+        if s.low then
+            r.QualityLevel = Enum.QualityLevel.Level01
+        elseif oq then
+            r.QualityLevel = oq
         end
     end)
 end
 
-local function setFixLag(value)
-    Settings.FixLag = value
-    Settings.Shadows = value
-    Settings.Particles = value
-    Settings.PostEffects = value
-    Settings.Materials = value
-    Settings.SimpleWater = value
-    Settings.LowQuality = value
-
-    applyShadows()
-
-    for kind in pairs(KindFlag) do
-        setKind(kind)
+local function setlag(v)
+    s.lag, s.shd, s.ptc, s.pst, s.mat, s.wtr, s.low = v, v, v, v, v, v, v
+    shadows()
+    for k in pairs(kf) do
+        setkind(k)
     end
-
-    applyWater()
-    applyQuality()
-    refreshPage()
-    notify(value and "Fix Lag enabled" or "Fix Lag disabled")
+    water()
+    quality()
+    refresh()
+    notify(v and "Fix Lag enabled" or "Fix Lag disabled")
 end
 
-local function restoreGraphics(silent)
-    Settings.FixLag = false
-    Settings.Shadows = false
-    Settings.Particles = false
-    Settings.Textures = false
-    Settings.PostEffects = false
-    Settings.Materials = false
-    Settings.SimpleWater = false
-    Settings.LowQuality = false
-
-    for kind in pairs(KindFlag) do
-        setKind(kind)
+local function rgraphics(q)
+    s.lag, s.shd, s.ptc, s.tex, s.pst, s.mat, s.wtr, s.low = false, false, false, false, false, false, false, false
+    for k in pairs(kf) do
+        setkind(k)
     end
-
-    applyShadows()
-    applyWater()
-    applyQuality()
-
-    if not silent then
+    shadows()
+    water()
+    quality()
+    if not q then
         notify("Graphics restored")
     end
 end
 
-local function isGameText(object)
-    return (object:IsA("TextLabel") or object:IsA("TextButton") or object:IsA("TextBox"))
-        and not object:IsDescendantOf(ScreenGui)
+local function isgt(o)
+    return (o:IsA("TextLabel") or o:IsA("TextButton") or o:IsA("TextBox")) and not o:IsDescendantOf(gui)
 end
 
-local function styleGameText(object)
-    local spec = FontState.Spec
-
-    if not spec or not FontState.Game then
+local function stylegt(o)
+    local sp = fs.spec
+    if not sp or not fs.game then
         return
     end
-
-    if GameTexts[object] == nil then
-        local ok, face = pcall(function()
-            return object.FontFace
+    if gtx[o] == nil then
+        local ok, f = pcall(function()
+            return o.FontFace
         end)
-
         if not ok then
             return
         end
-
-        GameTexts[object] = face
+        gtx[o] = f
     end
-
-    pcall(applySpec, object, spec)
+    pcall(apply, o, sp)
 end
 
-local function sweepGameText()
-    SweepToken += 1
-    local token = SweepToken
-
+local function sweep()
+    sweeptok += 1
+    local tok = sweeptok
     task.spawn(function()
-        local count = 0
-
-        for _, root in ipairs({PlayerGui, workspace}) do
-            for _, object in ipairs(root:GetDescendants()) do
-                if token ~= SweepToken or shuttingDown then
+        local t = os.clock()
+        for _, r in ipairs({pg, workspace}) do
+            for _, o in ipairs(r:GetDescendants()) do
+                if tok ~= sweeptok or dead then
                     return
                 end
-
-                if isGameText(object) then
-                    styleGameText(object)
+                if isgt(o) then
+                    stylegt(o)
                 end
-
-                count += 1
-
-                if count % 2000 == 0 then
+                if os.clock() - t > 0.003 then
                     task.wait()
+                    t = os.clock()
                 end
             end
         end
     end)
 end
 
-local function restoreGameText()
-    SweepToken += 1
-
-    for object, face in pairs(GameTexts) do
-        if object.Parent then
+local function rgt()
+    sweeptok += 1
+    for o, f in pairs(gtx) do
+        if o.Parent then
             pcall(function()
-                object.FontFace = face
+                o.FontFace = f
             end)
         end
     end
-
-    table.clear(GameTexts)
+    table.clear(gtx)
 end
 
-local function specMatches(object, spec)
-    if spec.Enum then
-        return object.Font == spec.Enum
+local function same(o, sp)
+    if sp.e then
+        return o.Font == sp.e
     end
-
-    local face = object.FontFace
-    return face.Family == spec.Face.Family and face.Weight == spec.Face.Weight and face.Style == spec.Face.Style
+    local f = o.FontFace
+    return f.Family == sp.f.Family and f.Weight == sp.f.Weight and f.Style == sp.f.Style
 end
 
-local FontButtons = {}
-
-local function refreshFontButtons()
-    for key, button in pairs(FontButtons) do
-        if button.Parent then
-            local active = FontState.Key == key
-            button.Text = active and "Active" or "Apply"
-            button.BackgroundColor3 = active and Colors.Green or Colors.Accent
+local function fbrefresh()
+    for k, b in pairs(fb) do
+        if b.Parent then
+            local on = fs.key == k
+            b.Text = on and "Active" or "Apply"
+            b.BackgroundColor3 = on and col.green or col.acc
+        else
+            fb[k] = nil
         end
     end
 end
 
-local function setFont(spec, silent)
-    FontState.Spec = spec
-    FontState.Key = spec and spec.Key or nil
-
-    applyMenuFont()
-
-    if spec then
-        if FontState.Game then
-            sweepGameText()
+local function setfont(sp, q)
+    fs.spec = sp
+    fs.key = sp and sp.k or nil
+    menufont()
+    if sp then
+        if fs.game then
+            sweep()
         end
     else
-        restoreGameText()
+        rgt()
     end
-
-    refreshFontButtons()
-    scheduleSave()
-
-    if not silent then
-        notify(spec and "Font applied" or "Font restored")
+    fbrefresh()
+    later()
+    if not q then
+        notify(sp and "Font applied" or "Font restored")
     end
 end
 
-local function setGameFont(enabled)
-    FontState.Game = enabled
-
-    if enabled and FontState.Spec then
-        sweepGameText()
+local function setgame(on)
+    fs.game = on
+    if on and fs.spec then
+        sweep()
     else
-        restoreGameText()
+        rgt()
     end
-
-    scheduleSave()
+    later()
 end
 
-local function setMenuFont(enabled)
-    FontState.Menu = enabled
-    applyMenuFont()
-    scheduleSave()
+local function setmenu(on)
+    fs.menu = on
+    menufont()
+    later()
 end
 
-local function applyTheme(silent)
-    Colors.Accent = CONFIG.Theme
-
-    Main.BackgroundTransparency = CONFIG.Transparency
-    PageHolder.ScrollBarImageColor3 = Colors.Accent
-
-    for _, item in ipairs(AccentStrokes) do
-        if item.Parent then
-            item.Color = Colors.Accent
+local function theme(q)
+    col.acc = cf.theme
+    main.BackgroundTransparency = cf.tr
+    holder.ScrollBarImageColor3 = col.acc
+    ind.BackgroundColor3 = col.acc
+    for i = #astk, 1, -1 do
+        local x = astk[i]
+        if x.Parent then
+            x.Color = col.acc
+        else
+            table.remove(astk, i)
         end
     end
-
-    updateResponsiveScale()
-    scheduleSave()
-
-    if not silent then
+    fit()
+    later()
+    if not q then
         notify("Theme updated")
     end
 end
 
-local function clearPage()
-    layoutOrder = 0
-
-    for _, child in ipairs(PageHolder:GetChildren()) do
-        if child:IsA("GuiObject") then
-            child:Destroy()
+local function clear()
+    order = 0
+    for _, o in ipairs(holder:GetChildren()) do
+        if o:IsA("GuiObject") then
+            o:Destroy()
         end
     end
 end
 
-local function nextOrder()
-    layoutOrder += 1
-    return layoutOrder
+local function nxt()
+    order += 1
+    return order
 end
 
-local function addCard(height)
-    local card = create("Frame", {
-        Size = UDim2.new(1, -5, 0, height),
-        BackgroundColor3 = Colors.Card,
-        BackgroundTransparency = 0.08,
-        BorderSizePixel = 0,
-        LayoutOrder = nextOrder()
-    }, PageHolder)
-
-    corner(card, 12)
-    stroke(card, Color3.new(1, 1, 1), 0.94)
-
-    return card
+local function card(h)
+    local f = mk("Frame", {Size = UDim2.new(1, -5, 0, h), BackgroundColor3 = col.card, BackgroundTransparency = 0.08, BorderSizePixel = 0, LayoutOrder = nxt()}, holder)
+    rc(f, 12)
+    st(f, Color3.new(1, 1, 1), 0.94)
+    return f
 end
 
-local function addSection(name)
-    text("TextLabel", {
-        Size = UDim2.new(1, -5, 0, 24),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Colors.Accent,
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        LayoutOrder = nextOrder()
-    }, PageHolder, true)
+local function section(n)
+    tx("TextLabel", {Size = UDim2.new(1, -5, 0, 24), BackgroundTransparency = 1, Text = n, TextColor3 = col.acc, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = nxt()}, holder, true)
 end
 
-local function addRow(name, buttons, previewFont)
-    local card = addCard(48)
-    local offset = 12
-    local created = {}
+local function hover(b, list)
+    list = list or conns
+    table.insert(list, b.MouseEnter:Connect(function()
+        tn(b, {BackgroundTransparency = 0.2}, 0.12)
+    end))
+    table.insert(list, b.MouseLeave:Connect(function()
+        tn(b, {BackgroundTransparency = 0}, 0.12)
+    end))
+end
 
-    for index = #buttons, 1, -1 do
-        local info = buttons[index]
-        local width = info.Width or 78
-
-        local button = text("TextButton", {
-            Size = UDim2.fromOffset(width, 30),
-            Position = UDim2.new(1, -(offset + width), 0.5, -15),
-            BackgroundColor3 = info.Color or Colors.Accent,
-            Text = info.Text,
-            TextColor3 = Colors.Text,
-            TextSize = 12,
-            AutoButtonColor = false
-        }, card, true)
-
-        corner(button, 9)
-        button.MouseButton1Click:Connect(info.Callback)
-
-        created[index] = button
-        offset += width + 8
+local function row(n, btns, pf)
+    local cd = card(48)
+    local off = 12
+    local made = {}
+    for i = #btns, 1, -1 do
+        local b = btns[i]
+        local w = b.w or 78
+        local bt = tx("TextButton", {Size = UDim2.fromOffset(w, 30), Position = UDim2.new(1, -(off + w), 0.5, -15), BackgroundColor3 = b.c or col.acc, Text = b.t, TextColor3 = col.text, TextSize = 12, AutoButtonColor = false}, cd, true)
+        rc(bt, 9)
+        hover(bt)
+        table.insert(conns, bt.MouseButton1Click:Connect(b.f))
+        made[i] = bt
+        off += w + 8
     end
-
-    local properties = {
-        Size = UDim2.new(1, -(offset + 14), 1, 0),
-        Position = UDim2.fromOffset(14, 0),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Colors.Text,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd
-    }
-
-    if previewFont then
-        properties.Font = previewFont
-        create("TextLabel", properties, card)
+    local p = {Size = UDim2.new(1, -(off + 14), 1, 0), Position = UDim2.fromOffset(14, 0), BackgroundTransparency = 1, Text = n, TextColor3 = col.text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd}
+    if pf then
+        p.Font = pf
+        mk("TextLabel", p, cd)
     else
-        text("TextLabel", properties, card, false)
+        tx("TextLabel", p, cd)
     end
-
-    return card, created
+    return cd, made
 end
 
-local function addButton(name, buttonText, callback, color)
-    local _, created = addRow(name, {{Text = buttonText or "Apply", Callback = callback, Color = color}})
-    return created[1]
+local function btn(n, t, f, c)
+    local _, m = row(n, {{t = t or "Apply", f = f, c = c}})
+    return m[1]
 end
 
-local function addToggle(name, initial, callback)
-    local card = addCard(48)
-    local enabled = initial == true
-
-    text("TextLabel", {
-        Size = UDim2.new(1, -90, 1, 0),
-        Position = UDim2.fromOffset(14, 0),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Colors.Text,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left
-    }, card, false)
-
-    local toggle = create("TextButton", {
-        Size = UDim2.fromOffset(46, 25),
-        Position = UDim2.new(1, -60, 0.5, -12),
-        BackgroundColor3 = enabled and Colors.Accent or Colors.Off,
-        Text = "",
-        AutoButtonColor = false
-    }, card)
-
-    corner(toggle, 20)
-
-    local knob = create("Frame", {
-        Size = UDim2.fromOffset(19, 19),
-        Position = enabled and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3),
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        BorderSizePixel = 0
-    }, toggle)
-
-    corner(knob, 20)
-
-    local function update(value)
-        enabled = value
-
-        tween(toggle, {
-            BackgroundColor3 = enabled and Colors.Accent or Colors.Off
-        })
-
-        tween(knob, {
-            Position = enabled and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3)
-        })
-
-        callback(enabled)
-    end
-
-    toggle.MouseButton1Click:Connect(function()
-        update(not enabled)
-    end)
-
-    return {
-        Set = update,
-        Get = function()
-            return enabled
-        end
-    }
+local function toggle(n, init, cb)
+    local cd = card(48)
+    local on = init == true
+    tx("TextLabel", {Size = UDim2.new(1, -90, 1, 0), Position = UDim2.fromOffset(14, 0), BackgroundTransparency = 1, Text = n, TextColor3 = col.text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left}, cd)
+    local tg = mk("TextButton", {Size = UDim2.fromOffset(46, 25), Position = UDim2.new(1, -60, 0.5, -12), BackgroundColor3 = on and col.acc or col.off, Text = "", AutoButtonColor = false}, cd)
+    rc(tg, 20)
+    local kn = mk("Frame", {Size = UDim2.fromOffset(19, 19), Position = on and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0}, tg)
+    rc(kn, 20)
+    table.insert(conns, tg.MouseButton1Click:Connect(function()
+        on = not on
+        tn(tg, {BackgroundColor3 = on and col.acc or col.off})
+        tn(kn, {Position = on and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3)})
+        cb(on)
+    end))
 end
 
-local function formatNumber(value)
-    return tostring(math.floor(value * 1000 + 0.5) / 1000)
+local function fmt(v)
+    return tostring(math.floor(v * 1000 + 0.5) / 1000)
 end
 
-local function addSlider(name, minimum, maximum, initial, callback, step)
+local function slider(n, mn, mx, init, cb, step)
     step = step or 0.1
-
-    local card = addCard(64)
-    local value = math.clamp(initial, minimum, maximum)
-    local range = maximum - minimum
-
-    text("TextLabel", {
-        Size = UDim2.new(1, -90, 0, 22),
-        Position = UDim2.fromOffset(14, 6),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Colors.Text,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left
-    }, card, false)
-
-    local valueLabel = text("TextLabel", {
-        Size = UDim2.fromOffset(70, 22),
-        Position = UDim2.new(1, -84, 0, 6),
-        BackgroundTransparency = 1,
-        Text = formatNumber(value),
-        TextColor3 = Colors.Accent,
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Right
-    }, card, false)
-
-    local hit = create("Frame", {
-        Size = UDim2.new(1, -28, 0, 26),
-        Position = UDim2.fromOffset(14, 32),
-        BackgroundTransparency = 1,
-        Active = true
-    }, card)
-
-    local bar = create("Frame", {
-        Size = UDim2.new(1, 0, 0, 6),
-        Position = UDim2.new(0, 0, 0.5, -3),
-        BackgroundColor3 = Color3.fromRGB(60, 64, 80),
-        BorderSizePixel = 0
-    }, hit)
-
-    corner(bar, 10)
-
-    local percent = (value - minimum) / range
-
-    local fill = create("Frame", {
-        Size = UDim2.new(percent, 0, 1, 0),
-        BackgroundColor3 = Colors.Accent,
-        BorderSizePixel = 0
-    }, bar)
-
-    corner(fill, 10)
-
-    local knob = create("Frame", {
-        Size = UDim2.fromOffset(15, 15),
-        Position = UDim2.new(percent, -7, 0.5, -7),
-        BackgroundColor3 = Color3.new(1, 1, 1),
-        BorderSizePixel = 0
-    }, bar)
-
-    corner(knob, 20)
-
-    local dragging = false
-    local dragInput
-
-    local function setValue(x)
-        local ratio = math.clamp((x - hit.AbsolutePosition.X) / math.max(hit.AbsoluteSize.X, 1), 0, 1)
-        local raw = minimum + range * ratio
-        local snapped = math.clamp(math.floor(raw / step + 0.5) * step, minimum, maximum)
-        snapped = math.floor(snapped * 1000 + 0.5) / 1000
-
-        local shown = (snapped - minimum) / range
-        fill.Size = UDim2.new(shown, 0, 1, 0)
-        knob.Position = UDim2.new(shown, -7, 0.5, -7)
-        valueLabel.Text = formatNumber(snapped)
-
-        if snapped ~= value then
-            value = snapped
-            callback(value)
+    local cd = card(64)
+    local v = math.clamp(init, mn, mx)
+    local rg = mx - mn
+    tx("TextLabel", {Size = UDim2.new(1, -90, 0, 22), Position = UDim2.fromOffset(14, 6), BackgroundTransparency = 1, Text = n, TextColor3 = col.text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left}, cd)
+    local vl = tx("TextLabel", {Size = UDim2.fromOffset(70, 22), Position = UDim2.new(1, -84, 0, 6), BackgroundTransparency = 1, Text = fmt(v), TextColor3 = col.acc, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Right}, cd)
+    local hit = mk("Frame", {Size = UDim2.new(1, -28, 0, 26), Position = UDim2.fromOffset(14, 32), BackgroundTransparency = 1, Active = true}, cd)
+    local bar = mk("Frame", {Size = UDim2.new(1, 0, 0, 6), Position = UDim2.new(0, 0, 0.5, -3), BackgroundColor3 = Color3.fromRGB(60, 64, 80), BorderSizePixel = 0}, hit)
+    rc(bar, 10)
+    local pc = rg == 0 and 0 or (v - mn) / rg
+    local fl = mk("Frame", {Size = UDim2.new(pc, 0, 1, 0), BackgroundColor3 = col.acc, BorderSizePixel = 0}, bar)
+    rc(fl, 10)
+    local kn = mk("Frame", {Size = UDim2.fromOffset(15, 15), Position = UDim2.new(pc, -7, 0.5, -7), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0}, bar)
+    rc(kn, 20)
+    local on, di = false, nil
+    local function set(x)
+        local r = math.clamp((x - hit.AbsolutePosition.X) / math.max(hit.AbsoluteSize.X, 1), 0, 1)
+        local q = math.clamp(math.floor((mn + rg * r) / step + 0.5) * step, mn, mx)
+        q = math.floor(q * 1000 + 0.5) / 1000
+        local p = rg == 0 and 0 or (q - mn) / rg
+        fl.Size = UDim2.new(p, 0, 1, 0)
+        kn.Position = UDim2.new(p, -7, 0.5, -7)
+        vl.Text = fmt(q)
+        if q ~= v then
+            v = q
+            cb(v)
         end
     end
-
-    table.insert(Connections, hit.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragInput = input
-            setValue(input.Position.X)
+    table.insert(conns, hit.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            on, di = true, i
+            set(i.Position.X)
         end
     end))
-
-    table.insert(Connections, UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input == dragInput) then
-            setValue(input.Position.X)
+    table.insert(conns, uis.InputChanged:Connect(function(i)
+        if on and (i.UserInputType == Enum.UserInputType.MouseMovement or i == di) then
+            set(i.Position.X)
         end
     end))
-
-    table.insert(Connections, UserInputService.InputEnded:Connect(function(input)
-        if input == dragInput or input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-            dragInput = nil
+    table.insert(conns, uis.InputEnded:Connect(function(i)
+        if i == di or i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            on, di = false, nil
         end
     end))
 end
 
-local function addForm(placeholders, buttonText, callback)
-    local count = #placeholders
-    local card = addCard(10 + count * 40)
-    local boxes = {}
-
-    for index, placeholder in ipairs(placeholders) do
-        local isLast = index == count
-
-        local box = text("TextBox", {
-            Size = UDim2.new(1, isLast and -112 or -24, 0, 30),
-            Position = UDim2.fromOffset(12, 10 + (index - 1) * 40),
-            BackgroundColor3 = Colors.Panel,
-            PlaceholderText = placeholder,
-            PlaceholderColor3 = Colors.SubText,
-            Text = "",
-            TextColor3 = Colors.Text,
-            TextSize = 12,
-            ClearTextOnFocus = false,
-            TextXAlignment = Enum.TextXAlignment.Left
-        }, card, false)
-
-        corner(box, 9)
-        padding(box, 10)
-        boxes[index] = box
+local function form(phs, bt, cb)
+    local cnt = #phs
+    local cd = card(10 + cnt * 40)
+    local bx = {}
+    for i, ph in ipairs(phs) do
+        local b = tx("TextBox", {Size = UDim2.new(1, i == cnt and -112 or -24, 0, 30), Position = UDim2.fromOffset(12, 10 + (i - 1) * 40), BackgroundColor3 = col.panel, PlaceholderText = ph, PlaceholderColor3 = col.sub, Text = "", TextColor3 = col.text, TextSize = 12, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left}, cd)
+        rc(b, 9)
+        pd(b, 10)
+        bx[i] = b
     end
-
     local function submit()
-        local values = {}
-
-        for index, box in ipairs(boxes) do
-            values[index] = box.Text
+        local vals = {}
+        for i, b in ipairs(bx) do
+            vals[i] = b.Text
         end
-
-        callback(values, boxes)
+        cb(vals)
     end
-
-    local button = text("TextButton", {
-        Size = UDim2.fromOffset(80, 30),
-        Position = UDim2.new(1, -92, 0, 10 + (count - 1) * 40),
-        BackgroundColor3 = Colors.Accent,
-        Text = buttonText,
-        TextColor3 = Colors.Text,
-        TextSize = 12,
-        AutoButtonColor = false
-    }, card, true)
-
-    corner(button, 9)
-    button.MouseButton1Click:Connect(submit)
-
-    boxes[count].FocusLost:Connect(function(enterPressed)
-        if enterPressed then
+    local sb = tx("TextButton", {Size = UDim2.fromOffset(80, 30), Position = UDim2.new(1, -92, 0, 10 + (cnt - 1) * 40), BackgroundColor3 = col.acc, Text = bt, TextColor3 = col.text, TextSize = 12, AutoButtonColor = false}, cd, true)
+    rc(sb, 9)
+    hover(sb)
+    table.insert(conns, sb.MouseButton1Click:Connect(submit))
+    table.insert(conns, bx[cnt].FocusLost:Connect(function(e)
+        if e then
             submit()
         end
-    end)
-
-    return boxes
+    end))
 end
 
-local function addTextInput(placeholder, onChange)
-    local card = addCard(48)
-
-    local box = text("TextBox", {
-        Size = UDim2.new(1, -24, 0, 30),
-        Position = UDim2.fromOffset(12, 9),
-        BackgroundColor3 = Colors.Panel,
-        PlaceholderText = placeholder,
-        PlaceholderColor3 = Colors.SubText,
-        Text = "",
-        TextColor3 = Colors.Text,
-        TextSize = 12,
-        ClearTextOnFocus = false,
-        TextXAlignment = Enum.TextXAlignment.Left
-    }, card, false)
-
-    corner(box, 9)
-    padding(box, 10)
-
-    box:GetPropertyChangedSignal("Text"):Connect(function()
-        onChange(box.Text)
-    end)
-
-    return box
+local function textin(ph, cb)
+    local cd = card(48)
+    local b = tx("TextBox", {Size = UDim2.new(1, -24, 0, 30), Position = UDim2.fromOffset(12, 9), BackgroundColor3 = col.panel, PlaceholderText = ph, PlaceholderColor3 = col.sub, Text = "", TextColor3 = col.text, TextSize = 12, ClearTextOnFocus = false, TextXAlignment = Enum.TextXAlignment.Left}, cd)
+    rc(b, 9)
+    pd(b, 10)
+    local tok = 0
+    table.insert(conns, b:GetPropertyChangedSignal("Text"):Connect(function()
+        tok += 1
+        local id = tok
+        task.delay(0.05, function()
+            if id == tok and not dead then
+                cb(b.Text)
+            end
+        end)
+    end))
 end
 
-local function addColorInput(name, initial, callback)
-    local card = addCard(48)
-
-    text("TextLabel", {
-        Size = UDim2.new(1, -212, 1, 0),
-        Position = UDim2.fromOffset(14, 0),
-        BackgroundTransparency = 1,
-        Text = name,
-        TextColor3 = Colors.Text,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextTruncate = Enum.TextTruncate.AtEnd
-    }, card, false)
-
-    local preview = create("Frame", {
-        Size = UDim2.fromOffset(22, 22),
-        Position = UDim2.new(1, -190, 0.5, -11),
-        BackgroundColor3 = initial,
-        BorderSizePixel = 0
-    }, card)
-
-    corner(preview, 6)
-    stroke(preview, Color3.new(1, 1, 1), 0.7)
-
-    local box = text("TextBox", {
-        Size = UDim2.fromOffset(90, 30),
-        Position = UDim2.new(1, -160, 0.5, -15),
-        BackgroundColor3 = Colors.Panel,
-        Text = toHex(initial),
-        TextColor3 = Colors.Text,
-        TextSize = 12,
-        ClearTextOnFocus = false
-    }, card, false)
-
-    corner(box, 9)
-
-    local button = text("TextButton", {
-        Size = UDim2.fromOffset(58, 30),
-        Position = UDim2.new(1, -64, 0.5, -15),
-        BackgroundColor3 = Colors.Accent,
-        Text = "Set",
-        TextColor3 = Colors.Text,
-        TextSize = 12,
-        AutoButtonColor = false
-    }, card, true)
-
-    corner(button, 9)
-
+local function colorin(n, init, cb)
+    local cd = card(48)
+    tx("TextLabel", {Size = UDim2.new(1, -212, 1, 0), Position = UDim2.fromOffset(14, 0), BackgroundTransparency = 1, Text = n, TextColor3 = col.text, TextSize = 13, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd}, cd)
+    local pv = mk("Frame", {Size = UDim2.fromOffset(22, 22), Position = UDim2.new(1, -190, 0.5, -11), BackgroundColor3 = init, BorderSizePixel = 0}, cd)
+    rc(pv, 6)
+    st(pv, Color3.new(1, 1, 1), 0.7)
+    local bx = tx("TextBox", {Size = UDim2.fromOffset(90, 30), Position = UDim2.new(1, -160, 0.5, -15), BackgroundColor3 = col.panel, Text = tohex(init), TextColor3 = col.text, TextSize = 12, ClearTextOnFocus = false}, cd)
+    rc(bx, 9)
+    local sb = tx("TextButton", {Size = UDim2.fromOffset(58, 30), Position = UDim2.new(1, -64, 0.5, -15), BackgroundColor3 = col.acc, Text = "Set", TextColor3 = col.text, TextSize = 12, AutoButtonColor = false}, cd, true)
+    rc(sb, 9)
+    hover(sb)
     local function submit()
-        local color = parseHex(box.Text)
-
-        if not color then
+        local cr = hex(bx.Text)
+        if not cr then
             notify("Invalid color")
             return
         end
-
-        preview.BackgroundColor3 = color
-        box.Text = toHex(color)
-        callback(color)
+        pv.BackgroundColor3 = cr
+        bx.Text = tohex(cr)
+        cb(cr)
     end
-
-    button.MouseButton1Click:Connect(submit)
-
-    box.FocusLost:Connect(function(enterPressed)
-        if enterPressed then
+    table.insert(conns, sb.MouseButton1Click:Connect(submit))
+    table.insert(conns, bx.FocusLost:Connect(function(e)
+        if e then
             submit()
         end
-    end)
+    end))
 end
 
-local function resetAll()
-    restoreGraphics(true)
-    restoreLighting(true)
-    restoreEffects()
-    restoreGameText()
-
-    FontState.Spec = nil
-    FontState.Key = nil
-    FontState.Game = true
-    FontState.Menu = true
-    applyMenuFont()
-
-    CONFIG.Theme = DEFAULT_THEME
-    CONFIG.MenuSize = 1
-    CONFIG.Transparency = 0.12
-    CONFIG.ToggleKey = Enum.KeyCode.RightShift
-    CONFIG.Notifications = true
-    CONFIG.ShowButton = true
-
-    Settings.FPS = false
-    Settings.Ping = false
-    Settings.Memory = false
-
-    for _, label in pairs(StatLabels) do
-        label.Visible = false
+local function resetall()
+    rgraphics(true)
+    rlight(true)
+    reffects(true)
+    rgt()
+    fs.spec, fs.key, fs.game, fs.menu = nil, nil, true, true
+    menufont()
+    cf.theme, cf.size, cf.tr, cf.key, cf.notif, cf.btn = dtheme, 1, 0.12, Enum.KeyCode.RightShift, true, true
+    s.fps, s.png, s.mem = false, false, false
+    for _, l in pairs(sl) do
+        l.Visible = false
     end
-
-    OpenButton.Visible = true
-
-    applyTheme(true)
-    resetPositions()
-    refreshPage()
-    scheduleSave()
+    obtn.Visible = true
+    theme(true)
+    resetpos()
+    refresh()
+    later()
     notify("Defaults restored")
 end
 
-Pages["Performance"] = function()
-    addSection("PERFORMANCE")
-
-    addToggle("Fix Lag", Settings.FixLag, setFixLag)
-
-    addToggle("Show FPS", Settings.FPS, function(value)
-        Settings.FPS = value
-        StatLabels.FPS.Visible = value
+pages.performance = function()
+    section("PERFORMANCE")
+    toggle("Fix Lag", s.lag, setlag)
+    for _, d in ipairs({{"Show FPS", "fps"}, {"Show Ping", "png"}, {"Show Memory", "mem"}}) do
+        toggle(d[1], s[d[2]], function(v)
+            s[d[2]] = v
+            sl[d[2]].Visible = v
+        end)
+    end
+    section("GRAPHICS")
+    toggle("Remove Shadows", s.shd, function(v)
+        s.shd = v
+        shadows()
     end)
-
-    addToggle("Show Ping", Settings.Ping, function(value)
-        Settings.Ping = value
-        StatLabels.Ping.Visible = value
+    for _, d in ipairs({{"Remove Particles", "ptc", "e"}, {"Remove Textures", "tex", "d"}, {"Remove Post Effects", "pst", "p"}, {"Smooth Materials", "mat", "m"}}) do
+        toggle(d[1], s[d[2]], function(v)
+            s[d[2]] = v
+            setkind(d[3])
+        end)
+    end
+    toggle("Simple Water", s.wtr, function(v)
+        s.wtr = v
+        water()
     end)
-
-    addToggle("Show Memory", Settings.Memory, function(value)
-        Settings.Memory = value
-        StatLabels.Memory.Visible = value
+    toggle("Low Quality Level", s.low, function(v)
+        s.low = v
+        quality()
     end)
-
-    addSection("GRAPHICS")
-
-    addToggle("Remove Shadows", Settings.Shadows, function(value)
-        Settings.Shadows = value
-        applyShadows()
-    end)
-
-    addToggle("Remove Particles", Settings.Particles, function(value)
-        Settings.Particles = value
-        setKind("Emitter")
-    end)
-
-    addToggle("Remove Textures", Settings.Textures, function(value)
-        Settings.Textures = value
-        setKind("Decal")
-    end)
-
-    addToggle("Remove Post Effects", Settings.PostEffects, function(value)
-        Settings.PostEffects = value
-        setKind("Post")
-    end)
-
-    addToggle("Smooth Materials", Settings.Materials, function(value)
-        Settings.Materials = value
-        setKind("Part")
-    end)
-
-    addToggle("Simple Water", Settings.SimpleWater, function(value)
-        Settings.SimpleWater = value
-        applyWater()
-    end)
-
-    addToggle("Low Quality Level", Settings.LowQuality, function(value)
-        Settings.LowQuality = value
-        applyQuality()
-    end)
-
-    addButton("Restore Graphics", "Restore", function()
-        restoreGraphics()
-        refreshPage()
+    btn("Restore Graphics", "Restore", function()
+        rgraphics()
+        refresh()
     end)
 end
 
-Pages["Sky"] = function()
-    addSection("PRESETS")
-
-    for _, preset in ipairs(SkyPresets) do
-        addButton(preset.Name, "Apply", function()
-            applySkyPreset(preset)
+pages.sky = function()
+    section("PRESETS")
+    btn("Random Sky", "Random", randomsky)
+    for _, p in ipairs(pskies) do
+        btn(p.n, "Apply", function()
+            applysky(p)
         end)
     end
-
-    addSection("SPACE")
-
-    for _, preset in ipairs(SpacePresets) do
-        addButton(preset.Name, "Apply", function()
-            applySpace(preset)
+    section("SPACE")
+    for _, p in ipairs(pspace) do
+        btn(p.n, "Apply", function()
+            applyspace(p)
         end)
     end
-
-    addSection("CUSTOM SKY")
-
-    addForm({"Name", "Asset ID (1 or 6, separated by comma)"}, "Add", function(values)
-        local ids = parseIds(values[2])
-
+    section("CUSTOM SKY")
+    form({"Name", "Asset ID (1 or 6, separated by comma)"}, "Add", function(v)
+        local ids = pids(v[2])
         if not ids then
             notify("Need 1 or 6 valid IDs")
             return
         end
-
-        local name = trim(values[1])
-
-        if name == "" then
-            name = "Sky " .. (#Saved.Skies + 1)
+        local n = trim(v[1])
+        if n == "" then
+            n = "Sky " .. (#sv.skies + 1)
         end
-
-        local entry = {Name = name, Ids = ids}
-        table.insert(Saved.Skies, entry)
-        scheduleSave()
-        applyCustomSky(entry)
+        local e = {Name = n, Ids = ids}
+        table.insert(sv.skies, e)
+        later()
+        applycustom(e)
     end)
-
-    for index, entry in ipairs(Saved.Skies) do
-        addRow(entry.Name, {
-            {
-                Text = "Apply",
-                Callback = function()
-                    applyCustomSky(entry)
-                end
-            },
-            {
-                Text = "X",
-                Width = 34,
-                Color = Colors.Red,
-                Callback = function()
-                    table.remove(Saved.Skies, index)
-                    scheduleSave()
-                    refreshPage()
-                end
-            }
+    for i, e in ipairs(sv.skies) do
+        row(e.Name, {
+            {t = "Apply", f = function()
+                applycustom(e)
+            end},
+            {t = "X", w = 34, c = col.red, f = function()
+                table.remove(sv.skies, i)
+                later()
+                refresh()
+            end}
         })
     end
-
-    addSection("SKY SETTINGS")
-
-    local sky = getSkyObject()
-
-    addSlider("Star Count", 0, 5000, readProperty(sky, "StarCount", 3000), function(value)
-        getCatSky().StarCount = value
+    section("LOCAL SKIES")
+    if not lfs then
+        row("Executor has no local file support", {})
+    else
+        if not lsk then
+            scanlocal()
+        end
+        btn("Rescan CatSkies folder", "Rescan", function()
+            scanlocal()
+            refresh()
+        end)
+        if #lsk == 0 then
+            row("Put sky folders in the CatSkies folder", {})
+        end
+        for _, e in ipairs(lsk) do
+            btn(e.n, "Apply", function()
+                applylocal(e)
+            end)
+        end
+    end
+    section("SKY SETTINGS")
+    local sk = cursky()
+    slider("Star Count", 0, 5000, rp(sk, "StarCount", 3000), function(v)
+        catsky().StarCount = v
     end, 100)
-
-    addSlider("Sun Size", 0, 60, readProperty(sky, "SunAngularSize", 21), function(value)
-        getCatSky().SunAngularSize = value
+    slider("Sun Size", 0, 60, rp(sk, "SunAngularSize", 21), function(v)
+        catsky().SunAngularSize = v
     end, 1)
-
-    addSlider("Moon Size", 0, 60, readProperty(sky, "MoonAngularSize", 11), function(value)
-        getCatSky().MoonAngularSize = value
+    slider("Moon Size", 0, 60, rp(sk, "MoonAngularSize", 11), function(v)
+        catsky().MoonAngularSize = v
     end, 1)
-
-    addToggle("Sun and Moon", readProperty(sky, "CelestialBodiesShown", true), function(value)
-        getCatSky().CelestialBodiesShown = value
+    toggle("Sun and Moon", rp(sk, "CelestialBodiesShown", true), function(v)
+        catsky().CelestialBodiesShown = v
     end)
-
-    addButton("Default Sky", "Restore", function()
-        restoreLighting()
-        refreshPage()
+    section("ANIMATION")
+    slider("Transition Time", 0, 5, s.gl, function(v)
+        s.gl = v
+    end, 0.1)
+    slider("Sky Rotation", -20, 20, s.spin, function(v)
+        s.spin = v
+        if v ~= 0 then
+            catsky()
+        end
+    end, 0.5)
+    slider("Time Flow", -1, 1, s.flow, function(v)
+        s.flow = v
+    end, 0.05)
+    btn("Default Sky", "Restore", function()
+        rlight()
+        refresh()
     end)
 end
 
-Pages["Lighting"] = function()
-    addSection("TIME")
-
-    addSlider("Time of Day", 0, 24, Lighting.ClockTime, function(value)
-        setClock(value)
-    end, 0.1)
-
-    addToggle("Lock Time", Settings.LockTime, function(value)
-        Settings.LockTime = value
-        Settings.LockedTime = Lighting.ClockTime
+pages.lighting = function()
+    section("TIME")
+    slider("Time of Day", 0, 24, lt.ClockTime, setclock, 0.1)
+    toggle("Lock Time", s.lck, function(v)
+        s.lck = v
+        s.lckt = lt.ClockTime
+        lockclock()
     end)
-
-    addSection("LIGHT")
-
-    addSlider("Brightness", 0, 6, Lighting.Brightness, function(value)
-        Lighting.Brightness = value
+    section("LIGHT")
+    slider("Brightness", 0, 6, lt.Brightness, function(v)
+        lt.Brightness = v
     end, 0.1)
-
-    addSlider("Exposure", -3, 3, Lighting.ExposureCompensation, function(value)
-        Lighting.ExposureCompensation = value
+    slider("Exposure", -3, 3, lt.ExposureCompensation, function(v)
+        lt.ExposureCompensation = v
     end, 0.1)
-
-    addSlider("Diffuse Scale", 0, 1, readProperty(Lighting, "EnvironmentDiffuseScale", 1), function(value)
-        pcall(function()
-            Lighting.EnvironmentDiffuseScale = value
+    for _, d in ipairs({{"Diffuse Scale", "EnvironmentDiffuseScale"}, {"Specular Scale", "EnvironmentSpecularScale"}}) do
+        slider(d[1], 0, 1, rp(lt, d[2], 1), function(v)
+            pcall(function()
+                lt[d[2]] = v
+            end)
+        end, 0.05)
+    end
+    toggle("Fog", s.fog, fog)
+    section("COLORS")
+    for _, d in ipairs({{"Ambient", "Ambient"}, {"Outdoor Ambient", "OutdoorAmbient"}, {"Fog Color", "FogColor"}, {"Shift Top", "ColorShift_Top"}, {"Shift Bottom", "ColorShift_Bottom"}}) do
+        colorin(d[1], lt[d[2]], function(cr)
+            lt[d[2]] = cr
         end)
-    end, 0.05)
-
-    addSlider("Specular Scale", 0, 1, readProperty(Lighting, "EnvironmentSpecularScale", 1), function(value)
-        pcall(function()
-            Lighting.EnvironmentSpecularScale = value
-        end)
-    end, 0.05)
-
-    addToggle("Fog", Settings.Fog, applyFog)
-
-    addSection("COLORS")
-
-    addColorInput("Ambient", Lighting.Ambient, function(color)
-        Lighting.Ambient = color
+    end
+    section("ATMOSPHERE")
+    local a = curatm()
+    for _, d in ipairs({{"Density", 0, 1, 0.395, 0.01}, {"Offset", 0, 1, 0, 0.01}, {"Haze", 0, 10, 0, 0.1}, {"Glare", 0, 10, 0, 0.1}}) do
+        slider(d[1], d[2], d[3], rp(a, d[1], d[4]), function(v)
+            setatm(d[1], v)
+        end, d[5])
+    end
+    colorin("Atmosphere Color", rp(a, "Color", Color3.fromRGB(199, 170, 107)), function(cr)
+        setatm("Color", cr)
     end)
-
-    addColorInput("Outdoor Ambient", Lighting.OutdoorAmbient, function(color)
-        Lighting.OutdoorAmbient = color
+    colorin("Atmosphere Decay", rp(a, "Decay", Color3.fromRGB(92, 60, 13)), function(cr)
+        setatm("Decay", cr)
     end)
-
-    addColorInput("Fog Color", Lighting.FogColor, function(color)
-        Lighting.FogColor = color
-    end)
-
-    addColorInput("Shift Top", Lighting.ColorShift_Top, function(color)
-        Lighting.ColorShift_Top = color
-    end)
-
-    addColorInput("Shift Bottom", Lighting.ColorShift_Bottom, function(color)
-        Lighting.ColorShift_Bottom = color
-    end)
-
-    addSection("ATMOSPHERE")
-
-    local atmosphere = getAtmosphereObject()
-
-    addSlider("Density", 0, 1, readProperty(atmosphere, "Density", 0.395), function(value)
-        setAtmosphere("Density", value)
-    end, 0.01)
-
-    addSlider("Offset", 0, 1, readProperty(atmosphere, "Offset", 0), function(value)
-        setAtmosphere("Offset", value)
-    end, 0.01)
-
-    addSlider("Haze", 0, 10, readProperty(atmosphere, "Haze", 0), function(value)
-        setAtmosphere("Haze", value)
-    end, 0.1)
-
-    addSlider("Glare", 0, 10, readProperty(atmosphere, "Glare", 0), function(value)
-        setAtmosphere("Glare", value)
-    end, 0.1)
-
-    addColorInput("Atmosphere Color", readProperty(atmosphere, "Color", Color3.fromRGB(199, 170, 107)), function(color)
-        setAtmosphere("Color", color)
-    end)
-
-    addColorInput("Atmosphere Decay", readProperty(atmosphere, "Decay", Color3.fromRGB(92, 60, 13)), function(color)
-        setAtmosphere("Decay", color)
-    end)
-
-    addButton("Restore Lighting", "Restore", function()
-        restoreLighting()
-        refreshPage()
+    btn("Restore Lighting", "Restore", function()
+        rlight()
+        refresh()
     end)
 end
 
-Pages["Effects"] = function()
-    addSection("BLOOM")
-
-    addToggle("Bloom", Settings.Bloom, function(value)
-        setEffect("Bloom", value)
+local function fx(sec, k, lbl, list)
+    section(sec)
+    toggle(lbl, s[k], function(v)
+        seteffect(k, v)
     end)
+    for _, d in ipairs(list) do
+        slider(d[1], d[2], d[3], ev[k][d[4]], function(v)
+            setev(k, d[4], v)
+        end, d[5])
+    end
+end
 
-    addSlider("Bloom Intensity", 0, 3, EffectValues.Bloom.Intensity, function(value)
-        setEffectValue("Bloom", "Intensity", value)
-    end, 0.05)
-
-    addSlider("Bloom Size", 0, 56, EffectValues.Bloom.Size, function(value)
-        setEffectValue("Bloom", "Size", value)
-    end, 1)
-
-    addSlider("Bloom Threshold", 0, 4, EffectValues.Bloom.Threshold, function(value)
-        setEffectValue("Bloom", "Threshold", value)
-    end, 0.05)
-
-    addSection("BLUR")
-
-    addToggle("Blur", Settings.Blur, function(value)
-        setEffect("Blur", value)
+pages.effects = function()
+    fx("BLOOM", "bloom", "Bloom", {{"Bloom Intensity", 0, 3, "Intensity", 0.05}, {"Bloom Size", 0, 56, "Size", 1}, {"Bloom Threshold", 0, 4, "Threshold", 0.05}})
+    fx("BLUR", "blur", "Blur", {{"Blur Size", 0, 56, "Size", 1}})
+    fx("SUN RAYS", "rays", "Sun Rays", {{"Rays Intensity", 0, 1, "Intensity", 0.01}, {"Rays Spread", 0, 1, "Spread", 0.01}})
+    fx("DEPTH OF FIELD", "dof", "Depth of Field", {{"Far Intensity", 0, 1, "FarIntensity", 0.01}, {"Focus Distance", 0, 200, "FocusDistance", 1}, {"Focus Radius", 0, 100, "InFocusRadius", 1}})
+    section("COLOR")
+    for _, d in ipairs({{"Color Brightness", -0.5, 0.5, "Brightness", 0.01}, {"Contrast", -1, 1, "Contrast", 0.05}, {"Saturation", -1, 1, "Saturation", 0.05}}) do
+        slider(d[1], d[2], d[3], cv[d[4]], function(v)
+            setcc(d[4], v)
+        end, d[5])
+    end
+    colorin("Tint", cv.TintColor, function(cr)
+        setcc("TintColor", cr)
     end)
-
-    addSlider("Blur Size", 0, 56, EffectValues.Blur.Size, function(value)
-        setEffectValue("Blur", "Size", value)
+    section("CAMERA")
+    toggle("Custom FOV", s.cfov, setfov)
+    slider("Field of View", 30, 120, s.fov, function(v)
+        s.fov = v
     end, 1)
-
-    addSection("SUN RAYS")
-
-    addToggle("Sun Rays", Settings.SunRays, function(value)
-        setEffect("SunRays", value)
-    end)
-
-    addSlider("Rays Intensity", 0, 1, EffectValues.SunRays.Intensity, function(value)
-        setEffectValue("SunRays", "Intensity", value)
-    end, 0.01)
-
-    addSlider("Rays Spread", 0, 1, EffectValues.SunRays.Spread, function(value)
-        setEffectValue("SunRays", "Spread", value)
-    end, 0.01)
-
-    addSection("DEPTH OF FIELD")
-
-    addToggle("Depth of Field", Settings.DoF, function(value)
-        setEffect("DoF", value)
-    end)
-
-    addSlider("Far Intensity", 0, 1, EffectValues.DoF.FarIntensity, function(value)
-        setEffectValue("DoF", "FarIntensity", value)
-    end, 0.01)
-
-    addSlider("Focus Distance", 0, 200, EffectValues.DoF.FocusDistance, function(value)
-        setEffectValue("DoF", "FocusDistance", value)
-    end, 1)
-
-    addSlider("Focus Radius", 0, 100, EffectValues.DoF.InFocusRadius, function(value)
-        setEffectValue("DoF", "InFocusRadius", value)
-    end, 1)
-
-    addSection("COLOR")
-
-    addSlider("Color Brightness", -0.5, 0.5, ColorValues.Brightness, function(value)
-        setColorValue("Brightness", value)
-    end, 0.01)
-
-    addSlider("Contrast", -1, 1, ColorValues.Contrast, function(value)
-        setColorValue("Contrast", value)
-    end, 0.05)
-
-    addSlider("Saturation", -1, 1, ColorValues.Saturation, function(value)
-        setColorValue("Saturation", value)
-    end, 0.05)
-
-    addColorInput("Tint", ColorValues.TintColor, function(color)
-        setColorValue("TintColor", color)
-    end)
-
-    addSection("CAMERA")
-
-    addToggle("Custom FOV", Settings.CustomFOV, setFOV)
-
-    addSlider("Field of View", 30, 120, Settings.FOV, function(value)
-        Settings.FOV = value
-    end, 1)
-
-    addButton("Reset Effects", "Reset", function()
-        restoreEffects()
-        refreshPage()
-        notify("Effects reset")
+    btn("Reset Effects", "Reset", function()
+        reffects()
+        refresh()
     end)
 end
 
-Pages["Fonts"] = function()
-    table.clear(FontButtons)
-
-    addSection("TARGET")
-
-    addToggle("Game Text", FontState.Game, setGameFont)
-    addToggle("Menu Text", FontState.Menu, setMenuFont)
-
-    addSection("CUSTOM FONT")
-
-    addForm({"Font name or Font ID"}, "Add", function(values)
-        local value = trim(values[1])
-        local spec = parseFont(value)
-
-        if not spec then
+pages.fonts = function()
+    table.clear(fb)
+    section("TARGET")
+    toggle("Game Text", fs.game, setgame)
+    toggle("Menu Text", fs.menu, setmenu)
+    section("CUSTOM FONT")
+    form({"Font name or Font ID"}, "Add", function(v)
+        local val = trim(v[1])
+        local sp = pfont(val, true)
+        if not sp then
             notify("Font not found")
             return
         end
-
-        if spec.Face then
-            local exists = false
-
-            for _, entry in ipairs(Saved.Fonts) do
-                if entry.Value == value then
-                    exists = true
+        if sp.f then
+            local ex = false
+            for _, e in ipairs(sv.fonts) do
+                if e.Value == val then
+                    ex = true
+                    break
                 end
             end
-
-            if not exists then
-                table.insert(Saved.Fonts, {Name = value, Value = value})
+            if not ex then
+                table.insert(sv.fonts, {Name = val, Value = val})
             end
         end
-
-        setFont(spec)
-        refreshPage()
+        setfont(sp)
+        refresh()
     end)
-
-    for index, entry in ipairs(Saved.Fonts) do
-        local spec = parseFont(entry.Value)
-
-        if spec then
-            local _, created = addRow(entry.Name, {
-                {
-                    Text = "Apply",
-                    Callback = function()
-                        setFont(spec)
-                    end
-                },
-                {
-                    Text = "X",
-                    Width = 34,
-                    Color = Colors.Red,
-                    Callback = function()
-                        table.remove(Saved.Fonts, index)
-                        scheduleSave()
-                        refreshPage()
-                    end
-                }
+    for i, e in ipairs(sv.fonts) do
+        local sp = pfont(e.Value)
+        if sp then
+            local _, m = row(e.Name, {
+                {t = "Apply", f = function()
+                    setfont(sp)
+                end},
+                {t = "X", w = 34, c = col.red, f = function()
+                    table.remove(sv.fonts, i)
+                    later()
+                    refresh()
+                end}
             })
-
-            FontButtons[spec.Key] = created[1]
+            fb[sp.k] = m[1]
         end
     end
-
-    addSection("FONTS")
-
-    local rows = {}
-
-    addTextInput("Search font", function(query)
-        query = query:lower()
-
-        for _, row in ipairs(rows) do
-            row.Card.Visible = query == "" or row.Name:find(query, 1, true) ~= nil
+    section("FONTS")
+    local rws = {}
+    textin("Search font", function(q)
+        q = q:lower()
+        for _, r in ipairs(rws) do
+            r.c.Visible = q == "" or r.n:find(q, 1, true) ~= nil
         end
     end)
-
-    addButton("Default", "Reset", function()
-        setFont(nil)
-    end, Colors.Red)
-
-    for _, item in ipairs(FontItems) do
-        local spec = {Enum = item, Key = "Enum:" .. item.Name}
-
-        local card, created = addRow(item.Name, {
-            {
-                Text = "Apply",
-                Callback = function()
-                    setFont(spec)
-                end
-            }
-        }, item)
-
-        FontButtons[spec.Key] = created[1]
-        table.insert(rows, {Card = card, Name = item.Name:lower()})
+    btn("Default", "Reset", function()
+        setfont(nil)
+    end, col.red)
+    for _, it in ipairs(fitems) do
+        local sp = {e = it, k = "Enum:" .. it.Name}
+        local cd, m = row(it.Name, {{t = "Apply", f = function()
+            setfont(sp)
+        end}}, it)
+        fb[sp.k] = m[1]
+        table.insert(rws, {c = cd, n = it.Name:lower()})
     end
-
-    refreshFontButtons()
+    fbrefresh()
 end
 
-local Themes = {
+local themes = {
     {"Purple", Color3.fromRGB(120, 105, 255)},
     {"Blue", Color3.fromRGB(70, 150, 255)},
     {"Cyan", Color3.fromRGB(55, 210, 220)},
@@ -2479,494 +1790,408 @@ local Themes = {
     {"White", Color3.fromRGB(230, 230, 245)}
 }
 
-Pages["Interface"] = function()
-    addSection("WINDOW")
-
-    addSlider("Menu Size", 0.7, 1.2, CONFIG.MenuSize, function(value)
-        CONFIG.MenuSize = value
-        updateResponsiveScale()
-        scheduleSave()
+pages.interface = function()
+    section("WINDOW")
+    slider("Menu Size", 0.7, 1.2, cf.size, function(v)
+        cf.size = v
+        fit()
+        later()
     end, 0.05)
-
-    addSlider("Transparency", 0, 0.5, CONFIG.Transparency, function(value)
-        CONFIG.Transparency = value
-        Main.BackgroundTransparency = value
-        scheduleSave()
+    slider("Transparency", 0, 0.5, cf.tr, function(v)
+        cf.tr = v
+        main.BackgroundTransparency = v
+        later()
     end, 0.01)
-
-    addToggle("Notifications", CONFIG.Notifications, function(value)
-        CONFIG.Notifications = value
-        scheduleSave()
+    toggle("Notifications", cf.notif, function(v)
+        cf.notif = v
+        later()
     end)
-
-    addToggle("Show Button", CONFIG.ShowButton, function(value)
-        CONFIG.ShowButton = value
-        OpenButton.Visible = value
-        scheduleSave()
-
-        if not value then
-            notify("Press " .. CONFIG.ToggleKey.Name .. " to open")
+    toggle("Show Button", cf.btn, function(v)
+        cf.btn = v
+        obtn.Visible = v
+        later()
+        if not v then
+            notify("Press " .. cf.key.Name .. " to open")
         end
     end)
-
-    addForm({"Toggle key (" .. CONFIG.ToggleKey.Name .. ")"}, "Set", function(values)
-        local name = trim(values[1])
-        local ok, key = pcall(function()
-            return Enum.KeyCode[name]
+    form({"Toggle key (" .. cf.key.Name .. ")"}, "Set", function(v)
+        local ok, k = pcall(function()
+            return Enum.KeyCode[trim(v[1])]
         end)
-
-        if not ok or not key then
+        if not ok or not k then
             notify("Invalid key")
             return
         end
-
-        CONFIG.ToggleKey = key
-        scheduleSave()
-        notify("Key set to " .. key.Name)
-        refreshPage()
+        cf.key = k
+        later()
+        notify("Key set to " .. k.Name)
+        refresh()
     end)
-
-    addButton("Reset Position", "Reset", function()
-        resetPositions()
+    btn("Reset Position", "Reset", function()
+        resetpos()
     end)
-
-    addSection("THEME")
-
-    for _, theme in ipairs(Themes) do
-        addButton(theme[1], "Apply", function()
-            CONFIG.Theme = theme[2]
-            applyTheme()
-            refreshPage()
-        end, theme[2])
+    section("THEME")
+    for _, t in ipairs(themes) do
+        btn(t[1], "Apply", function()
+            cf.theme = t[2]
+            theme()
+            refresh()
+        end, t[2])
     end
-
-    addColorInput("Custom Color", CONFIG.Theme, function(color)
-        CONFIG.Theme = color
-        applyTheme()
-        refreshPage()
+    colorin("Custom Color", cf.theme, function(cr)
+        cf.theme = cr
+        theme()
+        refresh()
     end)
 end
 
-Pages["General"] = function()
-    addSection("RESTORE")
-
-    addButton("Restore Graphics", "Restore", function()
-        restoreGraphics()
-        refreshPage()
+pages.general = function()
+    section("RESTORE")
+    btn("Restore Graphics", "Restore", function()
+        rgraphics()
+        refresh()
     end)
-
-    addButton("Restore Lighting", "Restore", function()
-        restoreLighting()
-        refreshPage()
+    btn("Restore Lighting", "Restore", function()
+        rlight()
+        refresh()
     end)
-
-    addButton("Restore Effects", "Restore", function()
-        restoreEffects()
-        refreshPage()
-        notify("Effects reset")
+    btn("Restore Effects", "Restore", function()
+        reffects()
+        refresh()
     end)
-
-    addButton("Restore Fonts", "Restore", function()
-        setFont(nil)
+    btn("Restore Fonts", "Restore", function()
+        setfont(nil)
     end)
-
-    addButton("Restore Defaults", "Reset", resetAll)
-
-    addSection("SCRIPT")
-
-    addButton("Unload Script", "Unload", function()
+    btn("Restore Defaults", "Reset", resetall)
+    section("SCRIPT")
+    btn("Unload Script", "Unload", function()
         shutdown()
-    end, Colors.Red)
+    end, col.red)
 end
 
-openPage = function(name, keepScroll)
-    if not Pages[name] or shuttingDown then
+openpage = function(name, keep)
+    local build = pages[name:lower()]
+    if not build or dead then
         return
     end
-
-    local position = PageHolder.CanvasPosition
-
-    CurrentPage = name
-    PageTitle.Text = name
-
-    for _, connection in ipairs(Connections) do
-        connection:Disconnect()
+    local pos = holder.CanvasPosition
+    cur = name
+    title.Text = name
+    for _, x in ipairs(conns) do
+        x:Disconnect()
     end
-
-    table.clear(Connections)
-
-    clearPage()
-    Pages[name]()
-
-    for buttonName, button in pairs(NavButtons) do
-        tween(button, {
-            BackgroundColor3 = buttonName == name and Colors.Accent or Colors.Panel
-        })
+    table.clear(conns)
+    clear()
+    build()
+    for i, n in ipairs(pnames) do
+        local on = n == name
+        tn(navs[n], {BackgroundColor3 = on and col.acc or col.panel})
+        if on then
+            tn(ind, {Position = UDim2.fromOffset(4, 124 + (i - 1) * 42)}, 0.25)
+        end
     end
-
-    if keepScroll then
+    holder.Position = keep and UDim2.fromOffset(0, 55) or UDim2.fromOffset(18, 55)
+    tn(holder, {Position = UDim2.fromOffset(0, 55)}, 0.25)
+    if keep then
         task.spawn(function()
-            RunService.Heartbeat:Wait()
-            RunService.Heartbeat:Wait()
-
-            if not shuttingDown and PageHolder.Parent then
-                PageHolder.CanvasPosition = position
+            rs.Heartbeat:Wait()
+            rs.Heartbeat:Wait()
+            if not dead and holder.Parent then
+                holder.CanvasPosition = pos
             end
         end)
     else
-        PageHolder.CanvasPosition = Vector2.new(0, 0)
+        holder.CanvasPosition = Vector2.new(0, 0)
     end
 end
 
-refreshPage = function()
-    if CurrentPage then
-        openPage(CurrentPage, true)
+refresh = function()
+    if cur then
+        openpage(cur, true)
     end
 end
 
-for index, name in ipairs(PageNames) do
-    local button = text("TextButton", {
-        Name = name,
-        Size = UDim2.new(1, 0, 0, 36),
-        BackgroundColor3 = Colors.Panel,
-        Text = name,
-        TextColor3 = Colors.Text,
-        TextSize = 12,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        AutoButtonColor = false,
-        LayoutOrder = index
-    }, Navigation, false)
+hover(minb, life)
+hover(closeb, life)
+ind = mk("Frame", {Size = UDim2.fromOffset(4, 20), Position = UDim2.fromOffset(4, 124), BackgroundColor3 = col.acc, BorderSizePixel = 0}, side)
+rc(ind, 2)
 
-    corner(button, 9)
-    padding(button, 12)
-
-    button.MouseButton1Click:Connect(function()
-        openPage(name)
+for i, n in ipairs(pnames) do
+    local b = tx("TextButton", {Name = n, Size = UDim2.new(1, 0, 0, 36), BackgroundColor3 = col.panel, Text = n, TextColor3 = col.text, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false, LayoutOrder = i}, nav)
+    rc(b, 9)
+    pd(b, 12)
+    hover(b, life)
+    b.MouseButton1Click:Connect(function()
+        openpage(n)
     end)
-
-    NavButtons[name] = button
+    navs[n] = b
 end
 
-OpenButton = create("ImageButton", {
-    Name = "CatButton",
-    Size = UDim2.fromOffset(58, 58),
-    Position = UDim2.new(0, 25, 0.5, -29),
-    BackgroundColor3 = Colors.Panel,
-    Image = "rbxassetid://" .. CONFIG.AvatarId,
-    ScaleType = Enum.ScaleType.Crop,
-    AutoButtonColor = false,
-    Visible = CONFIG.ShowButton
-}, ScreenGui)
+obtn = mk("ImageButton", {Name = "CatButton", Size = UDim2.fromOffset(58, 58), Position = UDim2.new(0, 25, 0.5, -29), BackgroundColor3 = col.panel, Image = "rbxassetid://" .. cf.avatar, ScaleType = Enum.ScaleType.Crop, AutoButtonColor = false, Visible = cf.btn}, gui)
+rc(obtn, 18)
+ast(obtn, 0.45)
+fallback(obtn, 13)
 
-corner(OpenButton, 18)
-accentStroke(OpenButton, 0.45)
-imageFallback(OpenButton, 13)
+local moved = drag(obtn, obtn, false)
+drag(main, head, true)
 
-local openMoved = makeDraggable(OpenButton, OpenButton)
-makeDraggable(Main, Header)
-
-resetPositions = function()
-    Main.Position = UDim2.fromScale(0.5, 0.5)
-    OpenButton.Position = UDim2.new(0, 25, 0.5, -29)
-
-    for key, label in pairs(StatLabels) do
-        label.Position = StatPositions[key]
+resetpos = function()
+    main.Position = UDim2.fromScale(0.5, 0.5)
+    obtn.Position = UDim2.new(0, 25, 0.5, -29)
+    for k, l in pairs(sl) do
+        l.Position = spos[k]
     end
-
     notify("Position reset")
 end
 
-local function setMinimized(state)
-    minimized = state
+local function layout(m)
+    mini = m
+    side.Visible = not m
+    holder.Visible = not m
+    body.Position = m and UDim2.fromOffset(12, 10) or UDim2.fromOffset(185, 14)
+    body.Size = m and UDim2.new(1, -24, 0, 40) or UDim2.new(1, -195, 1, -28)
+    minb.Text = m and "+" or "−"
+end
 
-    if minimized then
-        Sidebar.Visible = false
-        PageHolder.Visible = false
-
-        Content.Position = UDim2.fromOffset(12, 10)
-        Content.Size = UDim2.new(1, -24, 0, 40)
-
-        PageTitle.Text = "CAT SETTINGS"
-        MinimizeButton.Text = "+"
-        Main.Size = UDim2.fromOffset(250, 60)
+local function setmin(m)
+    layout(m)
+    if m then
+        title.Text = "CAT SETTINGS"
+        main.Size = UDim2.fromOffset(250, 60)
     else
-        Sidebar.Visible = true
-        PageHolder.Visible = true
-
-        Content.Position = UDim2.fromOffset(185, 14)
-        Content.Size = UDim2.new(1, -195, 1, -28)
-
-        MinimizeButton.Text = "−"
-        Main.Size = UDim2.fromOffset(700, 460)
-
-        openPage(CurrentPage or "Performance", true)
+        main.Size = UDim2.fromOffset(700, 460)
+        openpage(cur or "Performance", true)
     end
 end
 
-local function openMenu()
-    if shuttingDown then
+local function openmenu()
+    if dead then
         return
     end
-
-    menuAnimationId += 1
-    minimized = false
-
-    Sidebar.Visible = true
-    Content.Visible = true
-    PageHolder.Visible = true
-
-    Content.Position = UDim2.fromOffset(185, 14)
-    Content.Size = UDim2.new(1, -195, 1, -28)
-
-    MinimizeButton.Text = "−"
-
-    Main.Visible = true
-    Main.Size = UDim2.fromOffset(620, 400)
-
-    tween(Main, {
-        Size = UDim2.fromOffset(700, 460)
-    }, 0.25)
-
-    openPage(CurrentPage or "Performance", true)
+    anim += 1
+    layout(false)
+    main.Visible = true
+    main.Size = UDim2.fromOffset(620, 400)
+    tn(main, {Size = UDim2.fromOffset(700, 460)}, 0.25)
+    openpage(cur or "Performance", true)
 end
 
-local function closeMenu()
-    if shuttingDown then
+local function closemenu()
+    if dead then
         return
     end
-
-    menuAnimationId += 1
-    local currentId = menuAnimationId
-
-    tween(Main, {
-        Size = UDim2.fromOffset(620, 400)
-    }, 0.18)
-
+    anim += 1
+    local id = anim
+    tn(main, {Size = UDim2.fromOffset(620, 400)}, 0.18)
     task.delay(0.2, function()
-        if menuAnimationId == currentId and Main.Parent then
-            Main.Visible = false
+        if anim == id and main.Parent then
+            main.Visible = false
         end
     end)
 end
 
-local function toggleMenu()
-    if Main.Visible then
-        closeMenu()
+local function togglemenu()
+    if main.Visible then
+        closemenu()
     else
-        openMenu()
+        openmenu()
     end
 end
 
 shutdown = function()
-    if shuttingDown then
+    if dead then
         return
     end
-
-    shuttingDown = true
-    menuAnimationId += 1
-    SweepToken += 1
-
-    for _, connection in ipairs(Connections) do
-        connection:Disconnect()
+    save()
+    dead = true
+    anim += 1
+    sweeptok += 1
+    if lockconn then
+        lockconn:Disconnect()
+        lockconn = nil
     end
-
-    for _, connection in ipairs(LifetimeConnections) do
-        connection:Disconnect()
+    if camconn then
+        camconn:Disconnect()
+        camconn = nil
     end
-
-    table.clear(Connections)
-    table.clear(LifetimeConnections)
-
-    if CameraConnection then
-        CameraConnection:Disconnect()
-        CameraConnection = nil
+    for _, x in ipairs(conns) do
+        x:Disconnect()
     end
-
+    for _, x in ipairs(life) do
+        x:Disconnect()
+    end
+    table.clear(conns)
+    table.clear(life)
     pcall(function()
-        RunService:UnbindFromRenderStep("CatSettingsFOV")
+        rs:UnbindFromRenderStep("CatSettingsFOV")
     end)
-
-    restoreGraphics(true)
-    restoreLighting(true)
-    restoreEffects()
-    restoreGameText()
-
-    if Shared.CatSettingsUnload == shutdown then
-        Shared.CatSettingsUnload = nil
+    rgraphics(true)
+    rlight(true)
+    reffects(true)
+    rgt()
+    if env.CatSettingsUnload == shutdown then
+        env.CatSettingsUnload = nil
     end
-
-    if ScreenGui then
-        ScreenGui:Destroy()
+    if gui then
+        gui:Destroy()
     end
 end
 
-MinimizeButton.MouseButton1Click:Connect(function()
-    setMinimized(not minimized)
+minb.MouseButton1Click:Connect(function()
+    setmin(not mini)
 end)
-
-CloseButton.MouseButton1Click:Connect(closeMenu)
-
-OpenButton.MouseButton1Click:Connect(function()
-    if openMoved() then
+closeb.MouseButton1Click:Connect(closemenu)
+obtn.MouseButton1Click:Connect(function()
+    if moved() then
         return
     end
-
-    toggleMenu()
+    togglemenu()
 end)
 
-table.insert(LifetimeConnections, UserInputService.InputBegan:Connect(function(input, processed)
-    if processed or shuttingDown then
+table.insert(life, uis.InputBegan:Connect(function(i, processed)
+    if processed or dead then
         return
     end
-
-    if input.KeyCode == CONFIG.ToggleKey then
-        toggleMenu()
+    if i.KeyCode == cf.key then
+        togglemenu()
     end
 end))
 
-local fpsFrames = 0
-local fpsTime = 0
-local statTimer = 0
-local fontTimer = 0
+local ff, ft, t2, t3 = 0, 0, 0, 0
 
-table.insert(LifetimeConnections, RunService.Heartbeat:Connect(function(deltaTime)
-    if shuttingDown then
+table.insert(life, rs.RenderStepped:Connect(function(dt)
+    if dead then
         return
     end
-
-    fpsFrames += 1
-    fpsTime += deltaTime
-    statTimer += deltaTime
-    fontTimer += deltaTime
-
-    if fpsTime >= 0.5 then
-        if Settings.FPS then
-            local fps = math.floor(fpsFrames / fpsTime + 0.5)
-            StatLabels.FPS.Text = "FPS: " .. fps
-            StatLabels.FPS.TextColor3 = fps >= 50 and Colors.Green or (fps >= 30 and Colors.Yellow or Colors.Red)
+    ff += 1
+    ft += dt
+    if s.spin ~= 0 then
+        local sk = lt:FindFirstChild("CatSky")
+        if sk then
+            local o = sk.SkyboxOrientation
+            sk.SkyboxOrientation = Vector3.new(o.X, (o.Y + s.spin * dt) % 360, o.Z)
         end
-
-        fpsFrames = 0
-        fpsTime = 0
     end
+    if ft >= 0.5 then
+        if s.fps and sl.fps.Visible then
+            local n = math.floor(ff / ft + 0.5)
+            sl.fps.Text = "FPS: " .. n
+            sl.fps.TextColor3 = n >= 50 and col.green or (n >= 30 and col.yellow or col.red)
+        end
+        ff, ft = 0, 0
+    end
+end))
 
-    if statTimer >= 1 then
-        statTimer = 0
-
-        if Settings.Ping then
-            local ok, value = pcall(function()
-                return Stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+table.insert(life, rs.Heartbeat:Connect(function(dt)
+    if dead then
+        return
+    end
+    t2 += dt
+    t3 += dt
+    if s.flow ~= 0 and not s.lck then
+        lt.ClockTime = (lt.ClockTime + s.flow * dt) % 24
+    end
+    if t2 >= 1 then
+        t2 = 0
+        if s.png and sl.png.Visible then
+            local ms
+            local ok, p = pcall(function()
+                return lp:GetNetworkPing() * 1000
             end)
-
-            if ok then
-                StatLabels.Ping.Text = "PING: " .. math.floor(value) .. " ms"
+            if ok and p then
+                ms = p
+            else
+                local ok2, v = pcall(function()
+                    return stats.Network.ServerStatsItem["Data Ping"]:GetValue()
+                end)
+                if ok2 and v then
+                    ms = v
+                end
+            end
+            if ms then
+                sl.png.Text = "PING: " .. math.floor(ms) .. " ms"
             end
         end
-
-        if Settings.Memory then
-            local ok, value = pcall(function()
-                return Stats:GetTotalMemoryUsageMb()
+        if s.mem and sl.mem.Visible then
+            local ok, v = pcall(function()
+                return stats:GetTotalMemoryUsageMb()
             end)
-
-            if ok then
-                StatLabels.Memory.Text = "MEM: " .. math.floor(value) .. " MB"
+            if ok and v then
+                sl.mem.Text = "MEM: " .. math.floor(v) .. " MB"
             end
         end
     end
-
-    if Settings.LockTime and math.abs(Lighting.ClockTime - Settings.LockedTime) > 0.001 then
-        Lighting.ClockTime = Settings.LockedTime
-    end
-
-    if fontTimer >= 0.5 then
-        fontTimer = 0
-
-        local spec = FontState.Spec
-
-        if spec and FontState.Game then
-            for object in pairs(GameTexts) do
-                if object.Parent then
-                    local ok, matches = pcall(specMatches, object, spec)
-
-                    if ok and not matches then
-                        pcall(applySpec, object, spec)
+    if t3 >= 0.5 then
+        t3 = 0
+        local sp = fs.spec
+        if sp and fs.game then
+            for o in pairs(gtx) do
+                if o.Parent then
+                    local ok, m = pcall(same, o, sp)
+                    if ok and not m then
+                        pcall(apply, o, sp)
                     end
+                else
+                    gtx[o] = nil
                 end
             end
         end
     end
 end))
 
-pcall(function()
-    RunService:UnbindFromRenderStep("CatSettingsFOV")
-end)
-
-RunService:BindToRenderStep("CatSettingsFOV", Enum.RenderPriority.Last.Value, function()
-    if Settings.CustomFOV then
-        local camera = workspace.CurrentCamera
-
-        if camera and camera.FieldOfView ~= Settings.FOV then
-            camera.FieldOfView = Settings.FOV
-        end
-    end
-end)
-
-local function handleNew(object)
-    if shuttingDown or not object.Parent then
+local function handle(o)
+    if dead or not o.Parent then
         return
     end
-
-    local kind = graphicsKind(object)
-
-    if kind and Settings[KindFlag[kind]] then
+    local k = kind(o)
+    if k and s[kf[k]] then
         pcall(function()
-            local data = captureObject(object, kind)
-
-            if data then
-                applyData(object, data)
+            local d = capture(o, k)
+            if d then
+                applyd(o, d)
             end
         end)
     end
-
-    if FontState.Spec and FontState.Game and isGameText(object) then
-        styleGameText(object)
+    if fs.spec and fs.game and isgt(o) then
+        stylegt(o)
     end
 end
 
-table.insert(LifetimeConnections, game.DescendantAdded:Connect(function(object)
-    if shuttingDown then
+local function added(o)
+    if dead then
         return
     end
-
-    local fontActive = FontState.Spec ~= nil and FontState.Game
-
-    if not (fontActive or Settings.Particles or Settings.Textures or Settings.PostEffects or Settings.Materials) then
+    local fa = fs.spec ~= nil and fs.game
+    if not (fa or s.ptc or s.tex or s.pst or s.mat) then
         return
     end
-
-    local kind = graphicsKind(object)
-    local wantsGraphics = kind ~= nil and Settings[KindFlag[kind]]
-    local wantsFont = fontActive and isGameText(object)
-
-    if wantsGraphics or wantsFont then
-        task.defer(handleNew, object)
-    end
-end))
-
-watchCamera()
-table.insert(LifetimeConnections, workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watchCamera))
-
-if Saved.ActiveFont then
-    local spec = specFromKey(Saved.ActiveFont)
-
-    if spec then
-        setFont(spec, true)
+    local k = kind(o)
+    if (k ~= nil and s[kf[k]]) or (fa and isgt(o)) then
+        task.defer(handle, o)
     end
 end
 
-applyTheme(true)
+table.insert(life, workspace.DescendantAdded:Connect(added))
+table.insert(life, lt.DescendantAdded:Connect(added))
+if pg then
+    table.insert(life, pg.DescendantAdded:Connect(function(o)
+        if not dead and fs.spec ~= nil and fs.game and isgt(o) then
+            task.defer(handle, o)
+        end
+    end))
+end
 
-Shared.CatSettingsUnload = shutdown
+watch()
+table.insert(life, workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(watch))
 
-openPage("Performance")
+if sv.active then
+    local sp = skey(sv.active)
+    if sp then
+        setfont(sp, true)
+    end
+end
+
+theme(true)
+env.CatSettingsUnload = shutdown
+openpage("Performance")
 notify("CAT SETTINGS loaded")
