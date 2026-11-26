@@ -27,7 +27,10 @@ local cf={
     tr=0.12,
     key=Enum.KeyCode.RightShift,
     notif=true,
-    btn=true
+    btn=true,
+    rgb=false,
+    sl={},
+    dc=""
 }
 local fs={
     spec=nil,
@@ -45,7 +48,7 @@ local function trim(v)
 end
 local function nid(v)
     local t=tostring(v)
-    return t:match("^%s*(%d+)%s*$") or t:match("rbxassetid://(%d+)") or t:match("[?&]id=(%d+)")
+    return t:match("^%s*(%d+)%s*$") or t:match("rbxassetid://(%d+)") or t:match("[?&]id=(%d+)") or t:match("/library/(%d+)") or t:match("/asset/(%d+)") or t:match("/catalog/(%d+)")
 end
 local function hex(v)
     local h=tostring(v):gsub("[#%s]", "")
@@ -57,7 +60,7 @@ end
 local function tohex(c)
     return string.format("#%02X%02X%02X", math.round(math.clamp(c.R, 0, 1) * 255), math.round(math.clamp(c.G, 0, 1) * 255), math.round(math.clamp(c.B, 0, 1) * 255))
 end
-local function load()
+local function loadcfg()
     if not cs then
         return
     end
@@ -88,6 +91,15 @@ local function load()
     end
     if type(d.ShowButton) == "boolean" then
         cf.btn=d.ShowButton
+    end
+    if type(d.RgbBorder) == "boolean" then
+        cf.rgb=d.RgbBorder
+    end
+    if type(d.Crosshair) == "table" then
+        cf.sl=d.Crosshair
+    end
+    if type(d.DiscordInvite) == "string" then
+        cf.dc=d.DiscordInvite
     end
     if type(d.Key) == "string" then
         local f, k=pcall(function()
@@ -131,7 +143,7 @@ local function load()
         end
     end
 end
-load()
+loadcfg()
 local col={
     bg=Color3.fromRGB(15, 17, 25),
     panel=Color3.fromRGB(23, 26, 37),
@@ -162,7 +174,7 @@ local stok={}
 local navs={}
 local pages={}
 local fb={}
-local pnames={"Performance", "Sky", "Lighting", "Effects", "Fonts", "Interface", "General"}
+local pnames={"Performance", "Sky", "Lighting", "Effects", "Shift Lock", "Servers", "Fonts", "Interface", "Discord", "General"}
 local cam0=workspace.CurrentCamera
 local s={
     lag=false,
@@ -187,7 +199,9 @@ local s={
     fov=cam0 and cam0.FieldOfView or 70,
     gl=1.5,
     spin=0,
-    flow=0
+    flow=0,
+    cyc=0,
+    hue=0
 }
 local kf={
     e="ptc",
@@ -410,6 +424,9 @@ local function save()
         Key=cf.key.Name,
         Notifications=cf.notif,
         ShowButton=cf.btn,
+        RgbBorder=cf.rgb,
+        Crosshair=cf.sl,
+        DiscordInvite=cf.dc,
         Skies=sv.skies,
         Fonts=sv.fonts,
         ActiveFont=fs.key,
@@ -494,7 +511,7 @@ local oq
 pcall(function()
     oq=settings().Rendering.QualityLevel
 end)
-gui=mk("ScreenGui", {Name="CatSettings", ResetOnSpawn=false, DisplayOrder=50, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, pg)
+gui=mk("ScreenGui", {Name="CatSettings", ResetOnSpawn=false, DisplayOrder=50, ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, pg or (gethui and gethui()) or game:GetService("CoreGui"))
 fade=mk("Frame", {Name="CatFade", Size=UDim2.fromScale(1, 1), Position=UDim2.fromOffset(0, 0), BackgroundColor3=Color3.new(0, 0, 0), BackgroundTransparency=1, BorderSizePixel=0, ZIndex=30, Active=false}, gui)
 main=mk("Frame", {Name="SettingsPanel", Size=UDim2.fromOffset(700, 460), AnchorPoint=Vector2.new(0.5, 0.5), Position=UDim2.fromScale(0.5, 0.5), BackgroundColor3=col.bg, BackgroundTransparency=cf.tr, BorderSizePixel=0, ClipsDescendants=true, Visible=false, ZIndex=10}, gui)
 rc(main, 18)
@@ -540,7 +557,7 @@ rc(av, 16)
 fallback(av, 14)
 tx("TextLabel", {Size=UDim2.new(1, -25, 0, 24), Position=UDim2.fromOffset(18, 82), BackgroundTransparency=1, Text="CAT SETTINGS", TextColor3=col.text, TextSize=15, TextXAlignment=Enum.TextXAlignment.Left}, side, true)
 nav=mk("Frame", {Size=UDim2.new(1, -20, 1, -126), Position=UDim2.fromOffset(10, 116), BackgroundTransparency=1}, side)
-mk("UIListLayout", {Padding=UDim.new(0, 6), SortOrder=Enum.SortOrder.LayoutOrder}, nav)
+mk("UIListLayout", {Padding=UDim.new(0, 4), SortOrder=Enum.SortOrder.LayoutOrder}, nav)
 body=mk("Frame", {Size=UDim2.new(1, -195, 1, -28), Position=UDim2.fromOffset(185, 14), BackgroundTransparency=1}, main)
 head=mk("Frame", {Size=UDim2.new(1, 0, 0, 48), BackgroundTransparency=1, Active=true}, body)
 title=tx("TextLabel", {Size=UDim2.new(1, -100, 0, 32), Position=UDim2.fromOffset(4, 0), BackgroundTransparency=1, Text="Performance", TextColor3=col.text, TextSize=20, TextXAlignment=Enum.TextXAlignment.Left}, head, true)
@@ -678,94 +695,6 @@ local function fog(on)
         lt.FogEnd=100000
     end
 end
-local pskies={
-    {
-        n="REALISTIC DAY",
-        t=13,
-        b=3,
-        a=Color3.fromRGB(170, 180, 200),
-        o=Color3.fromRGB(190, 195, 205),
-        f=Color3.fromRGB(180, 215, 245)
-    },
-    {
-        n="SUNRISE",
-        t=6.2,
-        b=2.4,
-        a=Color3.fromRGB(150, 130, 140),
-        o=Color3.fromRGB(200, 160, 150),
-        f=Color3.fromRGB(255, 190, 150)
-    },
-    {
-        n="GOLDEN HOUR",
-        t=17,
-        b=2.8,
-        a=Color3.fromRGB(180, 140, 115),
-        o=Color3.fromRGB(210, 155, 120),
-        f=Color3.fromRGB(255, 180, 125)
-    },
-    {
-        n="SUNSET",
-        t=18.3,
-        b=2.5,
-        a=Color3.fromRGB(145, 105, 130),
-        o=Color3.fromRGB(190, 130, 140),
-        f=Color3.fromRGB(245, 145, 135)
-    },
-    {
-        n="EVENING",
-        t=19.5,
-        b=2,
-        a=Color3.fromRGB(100, 105, 145),
-        o=Color3.fromRGB(125, 135, 180),
-        f=Color3.fromRGB(100, 120, 175)
-    },
-    {
-        n="NIGHT",
-        t=0,
-        b=1.5,
-        a=Color3.fromRGB(65, 75, 115),
-        o=Color3.fromRGB(90, 105, 150),
-        f=Color3.fromRGB(35, 45, 90)
-    },
-    {
-        n="MOONLIGHT",
-        t=0,
-        b=1.2,
-        a=Color3.fromRGB(50, 60, 100),
-        o=Color3.fromRGB(70, 85, 130),
-        f=Color3.fromRGB(25, 35, 75)
-    },
-    {
-        n="CLOUDY",
-        t=12,
-        b=2,
-        a=Color3.fromRGB(130, 140, 150),
-        o=Color3.fromRGB(160, 170, 180),
-        f=Color3.fromRGB(145, 160, 180)
-    }
-}
-local pspace={
-    {
-        n="MILKY WAY",
-        c=Color3.fromRGB(55, 65, 110)
-    },
-    {
-        n="DEEP SPACE",
-        c=Color3.fromRGB(35, 40, 85)
-    },
-    {
-        n="NEBULA",
-        c=Color3.fromRGB(100, 55, 140)
-    },
-    {
-        n="AURORA",
-        c=Color3.fromRGB(40, 115, 110)
-    },
-    {
-        n="GALAXY",
-        c=Color3.fromRGB(80, 45, 125)
-    }
-}
 local bskies={
     {
         Name="SKY 01 - CLASSIC",
@@ -892,53 +821,6 @@ local function setfov(on)
         ofov=nil
     end
 end
-local gtok=0
-local function glide(list, dur)
-    gtok=gtok+1
-    local id=gtok
-    dur=dur or s.gl
-    if dur <= 0 then
-        for _, d in ipairs(list) do
-            if d[2] == "ClockTime" then
-                s.lckt=d[3]
-            end
-            d[1][d[2]]=d[3]
-        end
-        return
-    end
-    local from={}
-    for i, d in ipairs(list) do
-        from[i]=d[1][d[2]]
-    end
-    local t=0
-    local con
-    con=rs.Heartbeat:Connect(function(dt)
-        if dead or id ~= gtok then
-            con:Disconnect()
-            return
-        end
-        t=t+dt
-        local a=math.min(t / dur, 1)
-        a=a * a * (3 - 2 * a)
-        for i, d in ipairs(list) do
-            local f=from[i]
-            local g=d[3]
-            local v=nil
-            if typeof(g) == "Color3" then
-                v=f:Lerp(g, a)
-            elseif d[2] == "ClockTime" then
-                v=(f + ((g - f + 12) % 24 - 12) * a) % 24
-                s.lckt=v
-            else
-                v=f + (g - f) * a
-            end
-            d[1][d[2]]=v
-        end
-        if a >= 1 then
-            con:Disconnect()
-        end
-    end)
-end
 local function run(fn, msg)
     runtok=runtok+1
     local id=runtok
@@ -968,32 +850,6 @@ local function run(fn, msg)
         exec()
         tn(fade, {BackgroundTransparency=1}, 0.5)
     end)
-end
-local function applysky(p)
-    run(function()
-        catsky(true)
-        local a=catatm()
-        glide({
-            {lt, "ClockTime", p.t}, {lt, "Brightness", p.b}, {lt, "Ambient", p.a}, {lt, "OutdoorAmbient", p.o}, {lt, "FogColor", p.f},
-            {a, "Density", 0.25}, {a, "Haze", 1}, {a, "Glare", 0.2}, {a, "Offset", 0.1}, {a, "Color", p.f}, {a, "Decay", Color3.fromRGB(90, 100, 130)}
-        })
-    end, p.n .. " applied")
-    refresh()
-end
-local function applyspace(p)
-    run(function()
-        local sk=catsky(true)
-        sk.StarCount=5000
-        sk.SunAngularSize=0
-        sk.MoonAngularSize=11
-        sk.CelestialBodiesShown=true
-        local a=catatm()
-        glide({
-            {lt, "ClockTime", 0}, {lt, "Brightness", 1.5}, {lt, "Ambient", p.c}, {lt, "OutdoorAmbient", p.c}, {lt, "FogColor", p.c},
-            {a, "Density", 0.05}, {a, "Haze", 0}, {a, "Color", p.c}
-        })
-    end, p.n .. " applied")
-    refresh()
 end
 local faces={"SkyboxBk", "SkyboxDn", "SkyboxFt", "SkyboxLf", "SkyboxRt", "SkyboxUp"}
 local function applycustom(e)
@@ -1060,12 +916,12 @@ local function scanlocal()
 end
 local function applylocal(e)
     task.spawn(function()
+        local urls={}
         local ok=pcall(function()
             local base=e.n:gsub("[^%w]", "_")
             if not isfolder(lcache) then
                 makefolder(lcache)
             end
-            local urls={}
             for k, prop in pairs(fk) do
                 local dst=lcache .. "/" .. base .. "_" .. k .. ".png"
                 if not isfile(dst) then
@@ -1073,17 +929,17 @@ local function applylocal(e)
                 end
                 urls[prop]=getcustomasset(dst)
             end
-            run(function()
-                local sk=catsky(true)
-                for prop, u in pairs(urls) do
-                    sk[prop]=u
-                end
-            end)
         end)
-        notify(ok and (e.n .. " applied") or "Local sky failed")
-        if ok then
-            refresh()
+        if not ok then
+            notify("Local sky failed")
+            return
         end
+        run(function()
+            local sk=catsky(true)
+            for prop, u in pairs(urls) do
+                sk[prop]=u
+            end
+        end, e.n .. " applied")
     end)
 end
 local function randomsky()
@@ -1091,18 +947,6 @@ local function randomsky()
         scanlocal()
     end
     local pool={}
-    for _, p in ipairs(pskies) do
-        local p=p
-        table.insert(pool, function()
-            applysky(p)
-        end)
-    end
-    for _, p in ipairs(pspace) do
-        local p=p
-        table.insert(pool, function()
-            applyspace(p)
-        end)
-    end
     for _, e in ipairs(sv.skies) do
         local e=e
         table.insert(pool, function()
@@ -1138,9 +982,10 @@ local function pids(v)
     return nil
 end
 local function rlight(q)
-    gtok=gtok+1
     s.spin=0
     s.flow=0
+    s.cyc=0
+    s.fb=false
     local a=lt:FindFirstChild("CatSky")
     if a then
         a:Destroy()
@@ -1189,6 +1034,9 @@ local function reffects(q)
     cv.Saturation=0
     cv.TintColor=Color3.new(1, 1, 1)
     setfov(false)
+    if s.xreset then
+        s.xreset()
+    end
     if not q then
         notify("Effects reset")
     end
@@ -1393,7 +1241,7 @@ local function sweep()
     local tok=sweeptok
     task.spawn(function()
         local t=os.clock()
-        for _, r in ipairs({pg, workspace}) do
+        for _, r in ipairs(pg and {pg, workspace} or {workspace}) do
             for _, o in ipairs(r:GetDescendants()) do
                 if tok ~= sweeptok or dead then
                     return
@@ -1483,8 +1331,8 @@ local function theme(q)
         end
     end
     fit()
-    later()
     if not q then
+        later()
         notify("Theme updated")
     end
 end
@@ -1505,17 +1353,28 @@ local function card(h)
     local f=mk("Frame", {Size=UDim2.new(1, -5, 0, h), BackgroundColor3=col.card, BackgroundTransparency=1, BorderSizePixel=0, LayoutOrder=nxt()}, holder)
     rc(f, 12)
     st(f, Color3.new(1, 1, 1), 0.94)
+    if s.still then
+        f.BackgroundTransparency=0.08
+        return f
+    end
     cseq=cseq+1
     local id=cseq
+    local pop=mk("UIScale", {Scale=0.94}, f)
     task.delay(0.015 * math.min(id, 18), function()
         if f.Parent then
             tn(f, {BackgroundTransparency=0.08}, 0.22)
+            tw:Create(pop, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale=1}):Play()
         end
     end)
     return f
 end
 local function section(n)
     local l=tx("TextLabel", {Size=UDim2.new(1, -5, 0, 24), BackgroundTransparency=1, Text=n, TextColor3=col.acc, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left, TextTransparency=1, LayoutOrder=nxt()}, holder, true)
+    pd(l, 4)
+    if s.still then
+        l.TextTransparency=0
+        return l
+    end
     cseq=cseq+1
     local id=cseq
     task.delay(0.015 * math.min(id, 18), function()
@@ -1589,13 +1448,13 @@ local function toggle(n, init, cb)
     table.insert(conns, tg.MouseButton1Click:Connect(function()
         on=not on
         tn(tg, {BackgroundColor3=on and col.acc or col.off})
-        tn(kn, {Position=on and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3)})
+        tw:Create(kn, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position=on and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3)}):Play()
         cb(on)
     end))
     return function(v)
         on=v == true
         tn(tg, {BackgroundColor3=on and col.acc or col.off})
-        tn(kn, {Position=on and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3)})
+        tw:Create(kn, TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position=on and UDim2.new(1, -22, 0, 3) or UDim2.fromOffset(3, 3)}):Play()
     end
 end
 local function fmt(v)
@@ -1614,7 +1473,7 @@ local function slider(n, mn, mx, init, cb, step)
     local pc=rg == 0 and 0 or (v - mn) / rg
     local fl=mk("Frame", {Size=UDim2.new(pc, 0, 1, 0), BackgroundColor3=col.acc, BorderSizePixel=0}, bar)
     rc(fl, 10)
-    local kn=mk("Frame", {Size=UDim2.fromOffset(15, 15), Position=UDim2.new(pc, -7, 0.5, -7), BackgroundColor3=Color3.new(1, 1, 1), BorderSizePixel=0}, bar)
+    local kn=mk("Frame", {Size=UDim2.fromOffset(15, 15), AnchorPoint=Vector2.new(0.5, 0.5), Position=UDim2.new(pc, 0, 0.5, 0), BackgroundColor3=Color3.new(1, 1, 1), BorderSizePixel=0}, bar)
     rc(kn, 20)
     local on=false
     local di=nil
@@ -1624,7 +1483,7 @@ local function slider(n, mn, mx, init, cb, step)
         q=math.floor(q * 1000 + 0.5) / 1000
         local p=rg == 0 and 0 or (q - mn) / rg
         fl.Size=UDim2.new(p, 0, 1, 0)
-        kn.Position=UDim2.new(p, -7, 0.5, -7)
+        kn.Position=UDim2.new(p, 0, 0.5, 0)
         vl.Text=fmt(q)
         if q ~= v then
             v=q
@@ -1636,6 +1495,7 @@ local function slider(n, mn, mx, init, cb, step)
             on=true
             di=i
             set(i.Position.X)
+            tn(kn, {Size=UDim2.fromOffset(20, 20)}, 0.12)
         end
     end))
     table.insert(conns, uis.InputChanged:Connect(function(i)
@@ -1647,6 +1507,7 @@ local function slider(n, mn, mx, init, cb, step)
         if i == di or i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
             on=false
             di=nil
+            tn(kn, {Size=UDim2.fromOffset(15, 15)}, 0.15)
         end
     end))
 end
@@ -1737,6 +1598,13 @@ local function resetall()
     cf.key=Enum.KeyCode.RightShift
     cf.notif=true
     cf.btn=true
+    if s.slreset then
+        s.slreset()
+    end
+    cf.rgb=false
+    if s.setrgb then
+        s.setrgb(false)
+    end
     s.fps=false
     s.png=false
     s.mem=false
@@ -1794,22 +1662,31 @@ pages.performance=function()
     end)
 end
 pages.sky=function()
-    section("PRESETS")
-    btn("Random Sky", "Random", randomsky)
-    for _, p in ipairs(pskies) do
-        local p=p
-        btn(p.n, "Apply", function()
-            applysky(p)
+    local function modelsky(id)
+        local ok, res=pcall(function()
+            return game:GetObjects("rbxassetid://" .. id)
         end)
-    end
-    section("SPACE")
-    for _, p in ipairs(pspace) do
-        local p=p
-        btn(p.n, "Apply", function()
-            applyspace(p)
-        end)
+        if not ok or type(res) ~= "table" then
+            return nil
+        end
+        for _, o in ipairs(res) do
+            local sk=o:IsA("Sky") and o or o:FindFirstChildWhichIsA("Sky", true)
+            if sk then
+                local ids={}
+                for i, f in ipairs(faces) do
+                    local n=nid(sk[f])
+                    if not n then
+                        return nil
+                    end
+                    ids[i]=n
+                end
+                return ids
+            end
+        end
+        return nil
     end
     section("SKY PACK")
+    btn("Random Sky", "Random", randomsky)
     for _, e in ipairs(bskies) do
         local e=e
         row(e.Name, {
@@ -1818,24 +1695,30 @@ pages.sky=function()
             end}
         })
     end
-    section("CUSTOM SKY")
-    form({"Name", "Asset ID (1 or 6, separated by comma)"}, "Add", function(v)
+    section("SKY FROM LINK")
+    form({"Name", "Sky link or ID (1 or 6, separated by comma)"}, "Add", function(v)
         local ids=pids(v[2])
         if not ids then
-            notify("Need 1 or 6 valid IDs")
+            notify("Need a valid link or ID")
             return
         end
         local n=trim(v[1])
-        if n == "" then
-            n="Sky " .. (#sv.skies + 1)
-        end
-        local e={
-            Name=n,
-            Ids=ids
-        }
-        table.insert(sv.skies, e)
-        later()
-        applycustom(e)
+        task.spawn(function()
+            if #ids == 1 then
+                notify("Loading sky...")
+                ids=modelsky(ids[1]) or ids
+            end
+            if n == "" then
+                n="Sky " .. (#sv.skies + 1)
+            end
+            local e={
+                Name=n,
+                Ids=ids
+            }
+            table.insert(sv.skies, e)
+            later()
+            applycustom(e)
+        end)
     end)
     for _, e in ipairs(sv.skies) do
         local e=e
@@ -1902,6 +1785,9 @@ pages.sky=function()
     slider("Time Flow", -1, 1, s.flow, function(v)
         s.flow=v
     end, 0.05)
+    slider("Color Cycle", 0, 1, s.cyc, function(v)
+        s.cyc=v
+    end, 0.05)
     btn("Default Sky", "Restore", function()
         rlight()
         refresh()
@@ -1931,6 +1817,11 @@ pages.lighting=function()
         end, 0.05)
     end
     toggle("Fog", s.fog, fog)
+    toggle("Fullbright", s.fb, function(v)
+        if s.setfb then
+            s.setfb(v)
+        end
+    end)
     section("COLORS")
     for _, d in ipairs({{"Ambient", "Ambient"}, {"Outdoor Ambient", "OutdoorAmbient"}, {"Fog Color", "FogColor"}, {"Shift Top", "ColorShift_Top"}, {"Shift Bottom", "ColorShift_Bottom"}}) do
         local d=d
@@ -1957,19 +1848,26 @@ pages.lighting=function()
         refresh()
     end)
 end
-local function fx(sec, k, lbl, list)
-    section(sec)
-    toggle(lbl, s[k], function(v)
-        seteffect(k, v)
-    end)
-    for _, d in ipairs(list) do
-        local d=d
-        slider(d[1], d[2], d[3], ev[k][d[4]], function(v)
-            setev(k, d[4], v)
-        end, d[5])
-    end
-end
 pages.effects=function()
+    local cgp={
+        {"Vivid", 0, 0.1, 0.5, Color3.fromRGB(255, 255, 255)},
+        {"Cinematic", -0.03, 0.25, -0.1, Color3.fromRGB(255, 235, 215)},
+        {"Dreamy", 0.05, -0.1, 0.3, Color3.fromRGB(255, 220, 245)},
+        {"Cyber", 0, 0.2, 0.4, Color3.fromRGB(200, 220, 255)},
+        {"Noir", 0, 0.3, -1, Color3.fromRGB(255, 255, 255)}
+    }
+    local function fx(sec, k, lbl, list)
+        section(sec)
+        toggle(lbl, s[k], function(v)
+            seteffect(k, v)
+        end)
+        for _, d in ipairs(list) do
+            local d=d
+            slider(d[1], d[2], d[3], ev[k][d[4]], function(v)
+                setev(k, d[4], v)
+            end, d[5])
+        end
+    end
     fx("BLOOM", "bloom", "Bloom", {{"Bloom Intensity", 0, 3, "Intensity", 0.05}, {"Bloom Size", 0, 56, "Size", 1}, {"Bloom Threshold", 0, 4, "Threshold", 0.05}})
     fx("BLUR", "blur", "Blur", {{"Blur Size", 0, 56, "Size", 1}})
     fx("SUN RAYS", "rays", "Sun Rays", {{"Rays Intensity", 0, 1, "Intensity", 0.01}, {"Rays Spread", 0, 1, "Spread", 0.01}})
@@ -1984,6 +1882,21 @@ pages.effects=function()
     colorin("Tint", cv.TintColor, function(cr)
         setcc("TintColor", cr)
     end)
+    section("COLOR PRESETS")
+    for _, d in ipairs(cgp) do
+        local d=d
+        btn(d[1], "Apply", function()
+            setcc("Brightness", d[2])
+            setcc("Contrast", d[3])
+            setcc("Saturation", d[4])
+            setcc("TintColor", d[5])
+            notify(d[1] .. " applied")
+            refresh()
+        end)
+    end
+    if s.fxpage then
+        s.fxpage()
+    end
     section("CAMERA")
     toggle("Custom FOV", s.cfov, setfov)
     slider("Field of View", 30, 120, s.fov, function(v)
@@ -2068,17 +1981,17 @@ pages.fonts=function()
     end
     fbrefresh()
 end
-local themes={
-    {"Purple", Color3.fromRGB(120, 105, 255)},
-    {"Blue", Color3.fromRGB(70, 150, 255)},
-    {"Cyan", Color3.fromRGB(55, 210, 220)},
-    {"Pink", Color3.fromRGB(255, 105, 175)},
-    {"Red", Color3.fromRGB(245, 85, 100)},
-    {"Green", Color3.fromRGB(70, 200, 140)},
-    {"Orange", Color3.fromRGB(255, 150, 75)},
-    {"White", Color3.fromRGB(230, 230, 245)}
-}
 pages.interface=function()
+    local themes={
+        {"Purple", Color3.fromRGB(120, 105, 255)},
+        {"Blue", Color3.fromRGB(70, 150, 255)},
+        {"Cyan", Color3.fromRGB(55, 210, 220)},
+        {"Pink", Color3.fromRGB(255, 105, 175)},
+        {"Red", Color3.fromRGB(245, 85, 100)},
+        {"Green", Color3.fromRGB(70, 200, 140)},
+        {"Orange", Color3.fromRGB(255, 150, 75)},
+        {"White", Color3.fromRGB(230, 230, 245)}
+    }
     section("WINDOW")
     slider("Menu Size", 0.7, 1.2, cf.size, function(v)
         cf.size=v
@@ -2101,6 +2014,13 @@ pages.interface=function()
         if not v then
             notify("Press " .. cf.key.Name .. " to open")
         end
+    end)
+    toggle("RGB Border", cf.rgb, function(v)
+        cf.rgb=v
+        if s.setrgb then
+            s.setrgb(v)
+        end
+        later()
     end)
     form({"Toggle key (" .. cf.key.Name .. ")"}, "Set", function(v)
         local ok, k=pcall(function()
@@ -2176,7 +2096,7 @@ openpage=function(name, keep)
         local on=n == name
         tn(navs[n], {BackgroundColor3=on and col.acc or col.panel})
         if on then
-            tn(ind, {Position=UDim2.fromOffset(4, 124 + (i - 1) * 42)}, 0.25)
+            tn(ind, {Position=UDim2.fromOffset(4, 120 + (i - 1) * 32)}, 0.25)
         end
     end
     holder.Position=keep and UDim2.fromOffset(0, 55) or UDim2.fromOffset(18, 55)
@@ -2195,16 +2115,18 @@ openpage=function(name, keep)
 end
 refresh=function()
     if cur and not mini and main.Visible then
+        s.still=true
         openpage(cur, true)
+        s.still=false
     end
 end
 hover(minb, life)
 hover(closeb, life)
-ind=mk("Frame", {Size=UDim2.fromOffset(4, 20), Position=UDim2.fromOffset(4, 124), BackgroundColor3=col.acc, BorderSizePixel=0}, side)
+ind=mk("Frame", {Size=UDim2.fromOffset(4, 20), Position=UDim2.fromOffset(4, 120), BackgroundColor3=col.acc, BorderSizePixel=0}, side)
 rc(ind, 2)
 for i, n in ipairs(pnames) do
     local n=n
-    local b=tx("TextButton", {Name=n, Size=UDim2.new(1, 0, 0, 36), BackgroundColor3=col.panel, Text=n, TextColor3=col.text, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left, AutoButtonColor=false, LayoutOrder=i}, nav)
+    local b=tx("TextButton", {Name=n, Size=UDim2.new(1, 0, 0, 28), BackgroundColor3=col.panel, Text=n, TextColor3=col.text, TextSize=12, TextXAlignment=Enum.TextXAlignment.Left, AutoButtonColor=false, LayoutOrder=i}, nav)
     rc(b, 9)
     pd(b, 12)
     hover(b, life)
@@ -2283,6 +2205,9 @@ local function openmenu()
     scaletw=tw:Create(scale, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale=mscale})
     scaletw:Play()
     openpage(cur or "Performance", true)
+    if s.navin then
+        s.navin()
+    end
 end
 local function closemenu()
     if dead then
@@ -2343,6 +2268,9 @@ shutdown=function()
     rlight(true)
     reffects(true)
     rgt()
+    if s.kill then
+        s.kill()
+    end
     if env.CatSettingsUnload == shutdown then
         env.CatSettingsUnload=nil
     end
@@ -2403,6 +2331,13 @@ table.insert(life, rs.Heartbeat:Connect(function(dt)
     t3=t3+dt
     if s.flow ~= 0 and not s.lck then
         lt.ClockTime=(lt.ClockTime + s.flow * dt) % 24
+    end
+    if s.cyc ~= 0 then
+        s.hue=(s.hue + s.cyc * 0.1 * dt) % 1
+        local at=lt:FindFirstChild("CatAtmosphere") or catatm()
+        at.Color=Color3.fromHSV(s.hue, 0.55, 1)
+        lt.OutdoorAmbient=Color3.fromHSV(s.hue, 0.45, 0.85)
+        lt.FogColor=Color3.fromHSV(s.hue, 0.5, 1)
     end
     if t2 >= 1 then
         t2=0
@@ -2499,6 +2434,1097 @@ if sv.active then
     end
 end
 theme(true)
+xpcall(function()
+    s.mbi=1
+    local TS=game:GetService("TeleportService")
+    local srv={}
+    local busy=false
+    local scanpages=2
+    local minfree=1
+    local maxping=0
+    local maxpl=0
+    local view=1
+    local vnames={"Ping", "Players", "FPS"}
+    local vmodes={"ping", "players", "fps"}
+    local tplist
+    local tpi=0
+    local function rq(o)
+        local f=request or http_request or (syn and syn.request) or (fluxus and fluxus.request) or (type(env.http) == "table" and env.http.request)
+        if type(f) ~= "function" then
+            return nil
+        end
+        local ok, r=pcall(f, o)
+        if ok and type(r) == "table" then
+            return r
+        end
+        return nil
+    end
+    local function clip(t)
+        local f=setclipboard or toclipboard or set_clipboard or (syn and syn.write_clipboard)
+        if type(f) ~= "function" then
+            return false
+        end
+        return (pcall(f, t))
+    end
+    local function req(url)
+        local r=rq({Url=url, Method="GET"})
+        if r then
+            if r.StatusCode == 200 then
+                return r.Body
+            end
+            return nil, r.StatusCode
+        end
+        local ok, b=pcall(function()
+            return game:HttpGet(url)
+        end)
+        if ok and type(b) == "string" then
+            return b
+        end
+        return nil, "nohttp"
+    end
+    local function fetch()
+        local out={}
+        local cursor=""
+        local code=nil
+        for p=1, scanpages do
+            local url="https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&excludeFullGames=true&limit=100"
+            if cursor ~= "" then
+                url=url .. "&cursor=" .. cursor
+            end
+            local body, c=req(url)
+            if not body then
+                code=c
+                break
+            end
+            local ok, d=pcall(function()
+                return http:JSONDecode(body)
+            end)
+            if not ok or type(d) ~= "table" or type(d.data) ~= "table" then
+                code="bad"
+                break
+            end
+            for _, v in ipairs(d.data) do
+                if type(v) == "table" and v.id ~= game.JobId and type(v.playing) == "number" and type(v.maxPlayers) == "number" and v.maxPlayers - v.playing >= minfree then
+                    local pn=tonumber(v.ping)
+                    if (maxping <= 0 or (pn and pn <= maxping)) and (maxpl <= 0 or v.playing <= maxpl) then
+                        table.insert(out, {id=v.id, ping=pn, fps=tonumber(v.fps), playing=v.playing, max=v.maxPlayers})
+                    end
+                end
+            end
+            if type(d.nextPageCursor) ~= "string" then
+                break
+            end
+            cursor=d.nextPageCursor
+            if p < scanpages then
+                task.wait(0.6)
+            end
+        end
+        return out, code
+    end
+    local function sortlist(l, m)
+        local out={}
+        for _, v in ipairs(l) do
+            if (m ~= "ping" or v.ping) and (m ~= "fps" or v.fps) then
+                table.insert(out, v)
+            end
+        end
+        if m == "random" then
+            for i=#out, 2, -1 do
+                local j=math.random(i)
+                out[i], out[j]=out[j], out[i]
+            end
+        else
+            table.sort(out, function(a, b)
+                if m == "players" then
+                    return a.playing < b.playing
+                elseif m == "fps" then
+                    return a.fps > b.fps
+                end
+                return a.ping < b.ping
+            end)
+        end
+        return out
+    end
+    local function tpgo()
+        tpi=tpi + 1
+        local v=tplist and tplist[tpi]
+        if not v or tpi > 5 then
+            tplist=nil
+            busy=false
+            notify("No server available")
+            return
+        end
+        notify("Joining " .. (v.ping and (math.floor(v.ping + 0.5) .. " ms") or "server") .. "...")
+        local ok=pcall(function()
+            TS:TeleportToPlaceInstance(game.PlaceId, v.id, lp)
+        end)
+        if not ok then
+            tpgo()
+            return
+        end
+        task.delay(12, function()
+            busy=false
+        end)
+    end
+    table.insert(life, TS.TeleportInitFailed:Connect(function(plr)
+        if tplist and not dead and plr == lp then
+            tpgo()
+        end
+    end))
+    local function hop(mode, listonly)
+        if busy then
+            return
+        end
+        busy=true
+        notify("Scanning servers...")
+        task.spawn(function()
+            local list, code=fetch()
+            if dead then
+                return
+            end
+            if #list == 0 then
+                busy=false
+                if code == 429 then
+                    notify("Rate limited, try again later")
+                elseif code == "nohttp" then
+                    notify("Executor has no HTTP support")
+                elseif maxping > 0 then
+                    notify("No server under " .. maxping .. " ms")
+                else
+                    notify("No server found")
+                end
+                return
+            end
+            if listonly then
+                srv=list
+                busy=false
+                notify(#list .. " servers found")
+                refresh()
+                return
+            end
+            local l=sortlist(list, mode)
+            if #l == 0 then
+                busy=false
+                notify("Servers have no " .. mode .. " data")
+                return
+            end
+            tplist=l
+            tpi=0
+            tpgo()
+        end)
+    end
+    local function pcolor(p)
+        if not p then
+            return nil
+        end
+        if p <= 80 then
+            return col.green
+        elseif p <= 150 then
+            return col.yellow
+        end
+        return col.red
+    end
+    pages.servers=function()
+        section("CURRENT SERVER")
+        local ok, p=pcall(function()
+            return lp:GetNetworkPing() * 1000
+        end)
+        row("Ping: " .. ((ok and p) and (math.floor(p) .. " ms") or "--") .. "   Players: " .. #plrs:GetPlayers() .. "/" .. plrs.MaxPlayers, {})
+        row("Job ID: " .. string.sub(game.JobId, 1, 8) .. "...", {
+            {t="Copy", w=64, f=function()
+                notify(clip(game.JobId) and "Job ID copied" or "Executor has no clipboard support")
+            end}
+        })
+        btn("Rejoin this server", "Rejoin", function()
+            notify("Rejoining...")
+            pcall(function()
+                TS:TeleportToPlaceInstance(game.PlaceId, game.JobId, lp)
+            end)
+        end)
+        section("QUICK HOP")
+        btn("Lowest ping", "Hop", function()
+            hop("ping")
+        end, col.green)
+        btn("Fewest players", "Hop", function()
+            hop("players")
+        end)
+        btn("Highest FPS", "Hop", function()
+            hop("fps")
+        end)
+        btn("Random server", "Hop", function()
+            hop("random")
+        end)
+        section("JOIN BY ID")
+        form({"Job ID"}, "Join", function(v)
+            local id=trim(v[1])
+            if not id:match("^[%w%-]+$") then
+                notify("Invalid Job ID")
+                return
+            end
+            if busy then
+                return
+            end
+            busy=true
+            tplist={{id=id}}
+            tpi=0
+            tpgo()
+        end)
+        section("FILTERS")
+        slider("Pages to Scan", 1, 8, scanpages, function(v)
+            scanpages=v
+        end, 1)
+        slider("Min Free Slots", 1, 10, minfree, function(v)
+            minfree=v
+        end, 1)
+        slider("Max Ping (0 = off)", 0, 400, maxping, function(v)
+            maxping=v
+        end, 10)
+        slider("Max Players (0 = off)", 0, 100, maxpl, function(v)
+            maxpl=v
+        end, 1)
+        section("SERVER LIST")
+        btn("Scan servers", "Scan", function()
+            hop("ping", true)
+        end)
+        btn("Sort: " .. vnames[view], "Change", function()
+            view=view % #vnames + 1
+            refresh()
+        end)
+        local shown=sortlist(srv, vmodes[view])
+        for i=1, math.min(#shown, 12) do
+            local v=shown[i]
+            row((v.ping and (math.floor(v.ping + 0.5) .. " ms") or "? ms") .. "  |  " .. v.playing .. "/" .. v.max .. "  |  " .. (v.fps and (math.floor(v.fps + 0.5) .. " fps") or "? fps"), {
+                {t="Join", w=64, c=pcolor(v.ping), f=function()
+                    if busy then
+                        return
+                    end
+                    busy=true
+                    tplist={v}
+                    tpi=0
+                    tpgo()
+                end}
+            })
+        end
+    end
+    if type(cf.dc) ~= "string" or not cf.dc:match("^[%w%-_]+$") then
+        cf.dc="rAnMe9pN2D"
+    end
+    local function dcode(v)
+        v=trim(v)
+        return v:match("discord%.gg/([%w%-_]+)") or v:match("discord%.com/invite/([%w%-_]+)") or v:match("discordapp%.com/invite/([%w%-_]+)") or (v:match("^[%w%-_]+$") and v)
+    end
+    local function djoin(code)
+        local r=rq({
+            Url="http://127.0.0.1:6463/rpc?v=1",
+            Method="POST",
+            Headers={["Content-Type"]="application/json", ["Origin"]="https://discord.com"},
+            Body=http:JSONEncode({cmd="INVITE_BROWSER", args={code=code}, nonce=http:GenerateGUID(false)})
+        })
+        if r and (r.StatusCode == 200 or r.Success) then
+            notify("Opening Discord...")
+            return
+        end
+        if clip("https://discord.gg/" .. code) then
+            notify("Discord app not found, link copied")
+        else
+            notify("Could not open Discord")
+        end
+    end
+    pages.discord=function()
+        section("DISCORD")
+        row(cf.dc ~= "" and ("discord.gg/" .. cf.dc) or "No invite set", {})
+        if cf.dc ~= "" then
+            btn("Join Discord", "Join", function()
+                task.spawn(djoin, cf.dc)
+            end, col.green)
+            btn("Copy invite link", "Copy", function()
+                notify(clip("https://discord.gg/" .. cf.dc) and "Link copied" or "Executor has no clipboard support")
+            end)
+        end
+        section("SET INVITE")
+        form({"Invite link or code"}, "Save", function(v)
+            local c=dcode(v[1])
+            if not c then
+                notify("Invalid invite")
+                return
+            end
+            cf.dc=c
+            later()
+            notify("Invite saved")
+            refresh()
+        end)
+    end
+    local sc=type(cf.sl) == "table" and cf.sl or {}
+    local function nm(v, d, a, b)
+        v=tonumber(v)
+        if not v then
+            return d
+        end
+        return math.clamp(v, a, b)
+    end
+    local C={
+        on=sc.on == true,
+        m=math.floor(nm(sc.m, 1, 1, 2)),
+        st=math.floor(nm(sc.st, 1, 1, 7)),
+        sz=nm(sc.sz, 10, 4, 40),
+        th=nm(sc.th, 2, 1, 6),
+        tr=nm(sc.tr, 0, 0, 0.9),
+        c={255, 255, 255},
+        ol=sc.ol ~= false,
+        al=sc.al == true,
+        rb=sc.rb == true,
+        fl=sc.fl == true,
+        off=nm(sc.off, 1.75, 0, 4)
+    }
+    if type(sc.c) == "table" then
+        C.c={math.floor(nm(sc.c[1], 255, 0, 255)), math.floor(nm(sc.c[2], 255, 0, 255)), math.floor(nm(sc.c[3], 255, 0, 255))}
+    end
+    cf.sl=C
+    local snames={"Dot", "Ring", "Dot + Ring", "Cross", "Crosshair", "Plus", "Diamond"}
+    local canfile=cs and type(getcustomasset) == "function"
+    local curl
+    local ours={}
+    local flon=false
+    local cg
+    local box
+    local els={}
+    local hid=false
+    local ocur=true
+    local pvt=0
+    local function paint(c)
+        for _, e in ipairs(els) do
+            if e.k == "f" then
+                e.o.BackgroundColor3=c
+            else
+                e.o.Color=c
+            end
+        end
+    end
+    local function fr(w, h, x, y, round)
+        local f=Instance.new("Frame")
+        f.AnchorPoint=Vector2.new(0.5, 0.5)
+        f.Size=UDim2.fromOffset(w, h)
+        f.Position=UDim2.fromOffset(x, y)
+        f.BorderSizePixel=0
+        f.BackgroundTransparency=C.tr
+        if round then
+            local u=Instance.new("UICorner")
+            u.CornerRadius=UDim.new(1, 0)
+            u.Parent=f
+        end
+        if C.ol then
+            local k=Instance.new("UIStroke")
+            k.Color=Color3.new(0, 0, 0)
+            k.Thickness=1
+            k.Transparency=math.min(1, C.tr + 0.2)
+            k.Parent=f
+        end
+        f.Parent=box
+        table.insert(els, {k="f", o=f})
+    end
+    local function ring(d, round)
+        local f=Instance.new("Frame")
+        f.AnchorPoint=Vector2.new(0.5, 0.5)
+        f.Size=UDim2.fromOffset(d, d)
+        f.Position=UDim2.fromOffset(0, 0)
+        f.BackgroundTransparency=1
+        f.BorderSizePixel=0
+        if round then
+            local u=Instance.new("UICorner")
+            u.CornerRadius=UDim.new(1, 0)
+            u.Parent=f
+        end
+        local k=Instance.new("UIStroke")
+        k.Thickness=C.th
+        k.Transparency=C.tr
+        k.Parent=f
+        f.Parent=box
+        table.insert(els, {k="s", o=k})
+        return f
+    end
+    local function build()
+        if cg then
+            cg:Destroy()
+        end
+        els={}
+        cg=Instance.new("ScreenGui")
+        cg.Name="CatCrosshair"
+        cg.IgnoreGuiInset=true
+        cg.ResetOnSpawn=false
+        cg.DisplayOrder=4
+        cg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+        box=Instance.new("Frame")
+        box.Position=UDim2.fromScale(0.5, 0.5)
+        box.Size=UDim2.fromOffset(0, 0)
+        box.BackgroundTransparency=1
+        box.Parent=cg
+        local sz=C.sz
+        local th=C.th
+        local st=C.st
+        if st == 1 then
+            local d=math.max(2, sz * 0.5)
+            fr(d, d, 0, 0, true)
+        elseif st == 2 then
+            ring(sz, true)
+        elseif st == 3 then
+            ring(sz, true)
+            fr(th + 2, th + 2, 0, 0, true)
+        elseif st == 4 or st == 5 then
+            local g=sz * 0.35
+            local l=sz * 0.65
+            fr(l, th, -(g + l / 2), 0)
+            fr(l, th, g + l / 2, 0)
+            fr(th, l, 0, -(g + l / 2))
+            fr(th, l, 0, g + l / 2)
+            if st == 5 then
+                fr(th + 1, th + 1, 0, 0, true)
+            end
+        elseif st == 6 then
+            fr(sz * 1.6, th, 0, 0)
+            fr(th, sz * 1.6, 0, 0)
+        else
+            ring(sz * 0.8, false).Rotation=45
+        end
+        paint(Color3.fromRGB(C.c[1], C.c[2], C.c[3]))
+        cg.Enabled=false
+        cg.Parent=gui.Parent
+    end
+    local crct
+    local function crc32(str)
+        if not crct then
+            crct={}
+            for i=0, 255 do
+                local x=i
+                for _=1, 8 do
+                    if bit32.band(x, 1) == 1 then
+                        x=bit32.bxor(bit32.rshift(x, 1), 0xEDB88320)
+                    else
+                        x=bit32.rshift(x, 1)
+                    end
+                end
+                crct[i]=x
+            end
+        end
+        local x=0xFFFFFFFF
+        for i=1, #str do
+            x=bit32.bxor(crct[bit32.band(bit32.bxor(x, string.byte(str, i)), 255)], bit32.rshift(x, 8))
+        end
+        return bit32.bxor(x, 0xFFFFFFFF)
+    end
+    local function u32(n)
+        return string.char(bit32.band(bit32.rshift(n, 24), 255), bit32.band(bit32.rshift(n, 16), 255), bit32.band(bit32.rshift(n, 8), 255), bit32.band(n, 255))
+    end
+    local function chunk(t, d)
+        return u32(#d) .. t .. d .. u32(crc32(t .. d))
+    end
+    local function makepng()
+        local N=96
+        local half=N / 2
+        local SS=3
+        local sz=C.sz
+        local th=C.th
+        local st=C.st
+        local fns={}
+        local function circ(r)
+            table.insert(fns, function(x, y)
+                return math.sqrt(x * x + y * y) - r
+            end)
+        end
+        local function annulus(rm, w)
+            table.insert(fns, function(x, y)
+                return math.abs(math.sqrt(x * x + y * y) - rm) - w / 2
+            end)
+        end
+        local function bx(cx, cy, hx, hy)
+            table.insert(fns, function(x, y)
+                local qx=math.abs(x - cx) - hx
+                local qy=math.abs(y - cy) - hy
+                local ox=math.max(qx, 0)
+                local oy=math.max(qy, 0)
+                return math.sqrt(ox * ox + oy * oy) + math.min(math.max(qx, qy), 0)
+            end)
+        end
+        if st == 1 then
+            circ(math.max(1, sz * 0.25))
+        elseif st == 2 then
+            annulus(sz / 2 - th / 2, th)
+        elseif st == 3 then
+            annulus(sz / 2 - th / 2, th)
+            circ((th + 2) / 2)
+        elseif st == 4 or st == 5 then
+            local g=sz * 0.35
+            local l=sz * 0.65
+            bx(-(g + l / 2), 0, l / 2, th / 2)
+            bx(g + l / 2, 0, l / 2, th / 2)
+            bx(0, -(g + l / 2), th / 2, l / 2)
+            bx(0, g + l / 2, th / 2, l / 2)
+            if st == 5 then
+                circ((th + 1) / 2)
+            end
+        elseif st == 6 then
+            bx(0, 0, sz * 0.8, th / 2)
+            bx(0, 0, th / 2, sz * 0.8)
+        else
+            table.insert(fns, function(x, y)
+                return math.abs((math.abs(x) + math.abs(y)) * 0.70711 - sz * 0.4) - th / 2
+            end)
+        end
+        local base=1 - C.tr
+        local r0=C.c[1]
+        local g0=C.c[2]
+        local b0=C.c[3]
+        local rows={}
+        for py=0, N - 1 do
+            local row={string.char(0)}
+            for px=0, N - 1 do
+                local sa=0
+                local sr=0
+                local sg=0
+                local sb=0
+                for iy=0, SS - 1 do
+                    for ix=0, SS - 1 do
+                        local x=px + (ix + 0.5) / SS - half
+                        local y=py + (iy + 0.5) / SS - half
+                        local d=1e9
+                        for _, f in ipairs(fns) do
+                            local v=f(x, y)
+                            if v < d then
+                                d=v
+                            end
+                        end
+                        if d <= 0 then
+                            sa=sa + base
+                            sr=sr + r0 * base
+                            sg=sg + g0 * base
+                            sb=sb + b0 * base
+                        elseif C.ol and d <= 1 then
+                            sa=sa + base * 0.85
+                        end
+                    end
+                end
+                if sa > 0 then
+                    row[#row + 1]=string.char(math.floor(sr / sa + 0.5), math.floor(sg / sa + 0.5), math.floor(sb / sa + 0.5), math.floor(sa / (SS * SS) * 255 + 0.5))
+                else
+                    row[#row + 1]=string.char(0, 0, 0, 0)
+                end
+            end
+            rows[#rows + 1]=table.concat(row)
+        end
+        local raw=table.concat(rows)
+        local a=1
+        local b=0
+        for i=1, #raw do
+            a=(a + string.byte(raw, i)) % 65521
+            b=(b + a) % 65521
+        end
+        local ln=#raw
+        local nl=65535 - ln
+        local z=string.char(120, 1, 1, ln % 256, math.floor(ln / 256), nl % 256, math.floor(nl / 256)) .. raw .. u32(b * 65536 + a)
+        return string.char(137, 80, 78, 71, 13, 10, 26, 10) .. chunk("IHDR", u32(N) .. u32(N) .. string.char(8, 6, 0, 0, 0)) .. chunk("IDAT", z) .. chunk("IEND", "")
+    end
+    local function genurl()
+        if not canfile then
+            return nil
+        end
+        local key=C.st .. "_" .. C.sz .. "_" .. C.th .. "_" .. math.floor(C.tr * 100 + 0.5) .. "_" .. C.c[1] .. "_" .. C.c[2] .. "_" .. C.c[3] .. "_" .. (C.ol and 1 or 0)
+        local path="CatCursor_" .. key .. ".png"
+        local ok, url=pcall(function()
+            if not isfile(path) then
+                writefile(path, makepng())
+            end
+            return getcustomasset(path)
+        end)
+        if ok and type(url) == "string" and url ~= "" then
+            return url
+        end
+        return nil
+    end
+    local cicreated=false
+    local ciorig=nil
+    local function setci(url)
+        local ps=lp:FindFirstChild("PlayerScripts")
+        local pm=ps and ps:FindFirstChild("PlayerModule")
+        local cm=pm and pm:FindFirstChild("CameraModule")
+        local m=cm and cm:FindFirstChild("MouseLockController")
+        if not m then
+            return
+        end
+        local v=m:FindFirstChild("CursorImage")
+        if url then
+            if not (v and v:IsA("StringValue")) then
+                if v then
+                    v:Destroy()
+                end
+                v=Instance.new("StringValue")
+                v.Name="CursorImage"
+                v.Parent=m
+                cicreated=true
+            elseif not cicreated and ciorig == nil then
+                ciorig=v.Value
+            end
+            v.Value=url
+        elseif v then
+            if cicreated then
+                v:Destroy()
+            elseif ciorig ~= nil then
+                v.Value=ciorig
+            end
+            cicreated=false
+            ciorig=nil
+        end
+    end
+    local function sysapply()
+        if C.on and C.m == 1 and curl then
+            setci(curl)
+        else
+            setci(nil)
+        end
+    end
+    local gtk=0
+    local function regen(now)
+        local function go()
+            curl=nil
+            if C.on and C.m == 1 then
+                curl=genurl()
+                if curl then
+                    ours[curl]=true
+                end
+            end
+            sysapply()
+            if cg then
+                build()
+            end
+            later()
+        end
+        if now then
+            go()
+            return
+        end
+        gtk=gtk + 1
+        local id=gtk
+        task.delay(0.35, function()
+            if id == gtk and not dead then
+                go()
+            end
+        end)
+    end
+    local function showcur()
+        if hid then
+            hid=false
+            uis.MouseIconEnabled=ocur
+        end
+    end
+    local function flset(on)
+        local was=flon
+        flon=on
+        if on or not was then
+            return
+        end
+        local ch=lp.Character
+        local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.AutoRotate=true
+            hum.CameraOffset=Vector3.new(0, 0, 0)
+        end
+        if uis.MouseBehavior == Enum.MouseBehavior.LockCenter then
+            uis.MouseBehavior=Enum.MouseBehavior.Default
+        end
+    end
+    local function forceupd()
+        if not (C.fl and flon) then
+            return
+        end
+        local ch=lp.Character
+        local hum=ch and ch:FindFirstChildOfClass("Humanoid")
+        if main.Visible then
+            uis.MouseBehavior=Enum.MouseBehavior.Default
+            if hum then
+                hum.AutoRotate=true
+            end
+            return
+        end
+        uis.MouseBehavior=Enum.MouseBehavior.LockCenter
+        local root=ch and ch:FindFirstChild("HumanoidRootPart")
+        local cam=workspace.CurrentCamera
+        if hum and root and cam and hum.Health > 0 and not hum.Sit then
+            hum.AutoRotate=false
+            hum.CameraOffset=hum.CameraOffset:Lerp(Vector3.new(C.off, 0, 0), 0.2)
+            local lv=cam.CFrame.LookVector
+            root.CFrame=CFrame.new(root.Position) * CFrame.Angles(0, math.atan2(-lv.X, -lv.Z), 0)
+        end
+    end
+    table.insert(life, uis.InputBegan:Connect(function(i, gp)
+        if gp or dead or not C.fl then
+            return
+        end
+        if i.KeyCode == Enum.KeyCode.LeftShift then
+            flset(not flon)
+        end
+    end))
+    local function crossupd()
+        forceupd()
+        local locked=uis.MouseBehavior == Enum.MouseBehavior.LockCenter
+        local sys=C.on and C.m == 1 and curl ~= nil
+        local ov=C.on and not sys
+        if sys then
+            if locked and (flon or uis.MouseIcon ~= "") then
+                if uis.MouseIcon ~= curl then
+                    uis.MouseIcon=curl
+                end
+            end
+        end
+        if not locked and ours[uis.MouseIcon] and os.clock() > pvt then
+            uis.MouseIcon=""
+        end
+        local prev=not curl and os.clock() < pvt
+        local want=prev or (ov and (locked or C.al) and (locked or not main.Visible))
+        if want then
+            if not cg then
+                build()
+            end
+            cg.Enabled=true
+            if C.rb then
+                paint(Color3.fromHSV((os.clock() * 0.25) % 1, 0.8, 1))
+            end
+        elseif cg then
+            cg.Enabled=false
+        end
+        if want and locked then
+            if not hid then
+                hid=true
+                ocur=uis.MouseIconEnabled
+            end
+            if uis.MouseIconEnabled then
+                uis.MouseIconEnabled=false
+            end
+        else
+            showcur()
+        end
+    end
+    pages["shift lock"]=function()
+        section("CUSTOM CURSOR")
+        toggle("Enable", C.on, function(v)
+            C.on=v
+            regen(true)
+        end)
+        btn("Mode: " .. (C.m == 1 and "System cursor" or "Overlay (GUI)"), "Change", function()
+            C.m=C.m % 2 + 1
+            regen(true)
+            refresh()
+        end)
+        if C.m == 1 and not canfile then
+            row("No file support, overlay is used instead", {})
+        end
+        btn("Preview (3s)", "Show", function()
+            pvt=os.clock() + 3
+            if curl then
+                uis.MouseIcon=curl
+            end
+        end)
+        section("SHIFT LOCK")
+        toggle("Force Shift Lock (Shift key)", C.fl, function(v)
+            C.fl=v
+            if not v then
+                flset(false)
+            end
+            later()
+        end)
+        slider("Camera Offset", 0, 4, C.off, function(v)
+            C.off=v
+            later()
+        end, 0.25)
+        section("STYLE")
+        for i, n in ipairs(snames) do
+            local i=i
+            btn(n, C.st == i and "Active" or "Use", function()
+                C.st=i
+                regen(true)
+                pvt=os.clock() + 2
+                if curl then
+                    uis.MouseIcon=curl
+                end
+                refresh()
+            end, C.st == i and col.green or nil)
+        end
+        section("LOOK")
+        slider("Size", 4, 40, C.sz, function(v)
+            C.sz=v
+            regen()
+        end, 1)
+        slider("Thickness", 1, 6, C.th, function(v)
+            C.th=v
+            regen()
+        end, 1)
+        slider("Transparency", 0, 0.9, C.tr, function(v)
+            C.tr=v
+            regen()
+        end, 0.05)
+        colorin("Color", Color3.fromRGB(C.c[1], C.c[2], C.c[3]), function(cr)
+            C.c={math.round(cr.R * 255), math.round(cr.G * 255), math.round(cr.B * 255)}
+            regen()
+        end)
+        toggle("Outline", C.ol, function(v)
+            C.ol=v
+            regen()
+        end)
+        if C.m == 2 then
+            toggle("Always Show", C.al, function(v)
+                C.al=v
+                later()
+            end)
+            toggle("Rainbow", C.rb, function(v)
+                C.rb=v
+                if not v and cg then
+                    paint(Color3.fromRGB(C.c[1], C.c[2], C.c[3]))
+                end
+                later()
+            end)
+        end
+    end
+    s.kill=function()
+        flset(false)
+        setci(nil)
+        if cg then
+            cg:Destroy()
+            cg=nil
+        end
+        showcur()
+        if ours[uis.MouseIcon] then
+            uis.MouseIcon=""
+        end
+    end
+    s.slreset=function()
+        C.on=false
+        C.m=1
+        C.st=1
+        C.sz=10
+        C.th=2
+        C.tr=0
+        C.c={255, 255, 255}
+        C.ol=true
+        C.al=false
+        C.rb=false
+        C.fl=false
+        C.off=1.75
+        s.kill()
+    end
+    if C.on then
+        regen(true)
+    end
+    local vg
+    local vcol=Color3.new(0, 0, 0)
+    local vint=0.6
+    local function vfix()
+        if not (vg and vg.Parent) then
+            return
+        end
+        for _, f in ipairs(vg:GetChildren()) do
+            if f:IsA("Frame") then
+                f.BackgroundColor3=vcol
+                f.UIGradient.Transparency=NumberSequence.new(1 - vint, 1)
+            end
+        end
+    end
+    local function vset(on)
+        s.vig=on
+        if on then
+            if not (vg and vg.Parent) then
+                vg=Instance.new("ScreenGui")
+                vg.Name="CatVignette"
+                vg.IgnoreGuiInset=true
+                vg.ResetOnSpawn=false
+                vg.DisplayOrder=5
+                vg.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+                local defs={
+                    {UDim2.new(1, 0, 0.3, 0), UDim2.new(0, 0, 0, 0), 90},
+                    {UDim2.new(1, 0, 0.3, 0), UDim2.new(0, 0, 0.7, 0), 270},
+                    {UDim2.new(0.22, 0, 1, 0), UDim2.new(0, 0, 0, 0), 0},
+                    {UDim2.new(0.22, 0, 1, 0), UDim2.new(0.78, 0, 0, 0), 180}
+                }
+                for _, d in ipairs(defs) do
+                    local f=Instance.new("Frame")
+                    f.Size=d[1]
+                    f.Position=d[2]
+                    f.BorderSizePixel=0
+                    f.BackgroundColor3=vcol
+                    local g=Instance.new("UIGradient")
+                    g.Rotation=d[3]
+                    g.Parent=f
+                    f.Parent=vg
+                end
+                vg.Parent=gui.Parent
+            end
+            vfix()
+            vg.Enabled=true
+        elseif vg then
+            vg.Enabled=false
+        end
+    end
+    local mb
+    local lv
+    local function setmb(on)
+        s.mb=on
+        lv=nil
+        if on then
+            if not (mb and mb.Parent) then
+                mb=Instance.new("BlurEffect")
+                mb.Name="CatMotionBlur"
+                mb.Size=0
+                mb.Parent=lt
+            end
+        elseif mb then
+            mb:Destroy()
+            mb=nil
+        end
+    end
+    local looks={
+        {n="Cinematic", fx={bloom={Intensity=0.5, Size=36, Threshold=0.9}, rays={Intensity=0.15, Spread=0.8}}, cc={-0.02, 0.2, -0.05, Color3.fromRGB(255, 235, 215)}},
+        {n="Dreamy", fx={bloom={Intensity=0.9, Size=56, Threshold=0.7}, dof={FarIntensity=0.25, FocusDistance=60, InFocusRadius=40, NearIntensity=0}}, cc={0.05, -0.1, 0.3, Color3.fromRGB(255, 220, 245)}},
+        {n="Cyber Glow", fx={bloom={Intensity=1.2, Size=40, Threshold=0.6}}, cc={0, 0.25, 0.5, Color3.fromRGB(200, 220, 255)}},
+        {n="Clean", fx={}, cc={0, 0.05, 0.15, Color3.new(1, 1, 1)}}
+    }
+    local function lookapply(d)
+        for k in pairs(ed) do
+            if d.fx[k] then
+                seteffect(k, true)
+                for p, v in pairs(d.fx[k]) do
+                    setev(k, p, v)
+                end
+            else
+                seteffect(k, false)
+            end
+        end
+        setcc("Brightness", d.cc[1])
+        setcc("Contrast", d.cc[2])
+        setcc("Saturation", d.cc[3])
+        setcc("TintColor", d.cc[4])
+        notify(d.n .. " applied")
+    end
+    s.fxpage=function()
+        section("LOOK PRESETS")
+        for _, d in ipairs(looks) do
+            local d=d
+            btn(d.n, "Apply", function()
+                lookapply(d)
+                refresh()
+            end)
+        end
+        section("VIGNETTE")
+        toggle("Vignette", s.vig, vset)
+        slider("Vignette Strength", 0, 1, vint, function(v)
+            vint=v
+            vfix()
+        end, 0.05)
+        colorin("Vignette Color", vcol, function(cr)
+            vcol=cr
+            vfix()
+        end)
+        section("MOTION BLUR")
+        toggle("Motion Blur", s.mb, setmb)
+        slider("Blur Strength", 0.2, 3, s.mbi, function(v)
+            s.mbi=v
+        end, 0.1)
+    end
+    local fbs
+    s.setfb=function(on)
+        local was=s.fb
+        s.fb=on
+        if on then
+            if not was then
+                fbs={}
+                for _, p in ipairs({"Brightness", "Ambient", "OutdoorAmbient", "FogStart", "FogEnd"}) do
+                    fbs[p]=lt[p]
+                end
+            end
+            lt.Brightness=2.5
+            lt.Ambient=Color3.fromRGB(200, 200, 200)
+            lt.OutdoorAmbient=Color3.fromRGB(200, 200, 200)
+            lt.FogStart=100000
+            lt.FogEnd=100000
+        elseif was and fbs then
+            for p, v in pairs(fbs) do
+                lt[p]=v
+            end
+            fbs=nil
+        end
+    end
+    local rgg
+    s.setrgb=function(on)
+        local sk=main:FindFirstChildOfClass("UIStroke")
+        if not sk then
+            return
+        end
+        if on then
+            if not (rgg and rgg.Parent) then
+                rgg=Instance.new("UIGradient")
+                rgg.Color=ColorSequence.new({
+                    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 120)),
+                    ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 200, 70)),
+                    ColorSequenceKeypoint.new(0.33, Color3.fromRGB(90, 255, 140)),
+                    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(70, 220, 255)),
+                    ColorSequenceKeypoint.new(0.67, Color3.fromRGB(110, 120, 255)),
+                    ColorSequenceKeypoint.new(0.83, Color3.fromRGB(230, 90, 255)),
+                    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 80, 120))
+                })
+                rgg.Parent=sk
+            end
+            sk.Transparency=0.15
+        else
+            if rgg then
+                rgg:Destroy()
+                rgg=nil
+            end
+            sk.Transparency=0.5
+        end
+    end
+    s.navin=function()
+        for i, n in ipairs(pnames) do
+            local b=navs[n]
+            b.BackgroundTransparency=1
+            b.TextTransparency=1
+            task.delay(0.03 * i, function()
+                if b.Parent then
+                    tn(b, {BackgroundTransparency=0, TextTransparency=0}, 0.25)
+                end
+            end)
+        end
+    end
+    s.xreset=function()
+        if vg then
+            vg:Destroy()
+            vg=nil
+        end
+        s.vig=false
+        setmb(false)
+    end
+    local ost=obtn:FindFirstChildOfClass("UIStroke")
+    table.insert(life, rs.RenderStepped:Connect(function(dt)
+        if dead then
+            return
+        end
+        crossupd()
+        if s.mb and mb and mb.Parent then
+            local cam=workspace.CurrentCamera
+            if cam then
+                local v=cam.CFrame.LookVector
+                if lv and dt > 0 then
+                    local target=math.clamp((v - lv).Magnitude / dt * 4 * s.mbi, 0, 28)
+                    mb.Size=mb.Size + (target - mb.Size) * math.min(dt * 12, 1)
+                end
+                lv=v
+            end
+        end
+        if cf.rgb and rgg and rgg.Parent then
+            rgg.Rotation=(rgg.Rotation + 80 * dt) % 360
+        end
+        if ost then
+            ost.Transparency=0.45 + 0.2 * math.sin(os.clock() * 2.5)
+        end
+    end))
+    s.setrgb(cf.rgb)
+end, function(e)
+    warn("CatSettings extras failed: " .. tostring(e))
+end)
 env.CatSettingsUnload=shutdown
 openpage("Performance")
 notify("CAT SETTINGS loaded")
